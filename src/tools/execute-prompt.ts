@@ -57,7 +57,7 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
 
         if (!wait) {
           // Fire-and-forget: submit prompt, return immediately
-          const { promptId } = await wireClient.submitPrompt(prompt);
+          const { promptId } = await wireClient.submitPrompt(prompt, { autoApprove: auto_mode });
           return {
             content: [
               {
