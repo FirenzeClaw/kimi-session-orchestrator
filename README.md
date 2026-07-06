@@ -1,7 +1,7 @@
 <!--
 修改记录:
-  2026-07-06 | kimi-code (feature) | watch_session/get_watch_result/continue_watch 3工具: WS后台监听+自动化循环
-  2026-07-06 | kimi-code (bugfix) | /auto注入移除、execute_prompt auto_mode 修复、WS推送集成、架构深化8项
+  2026-07-06 | kimi-code (arch) | 后台监听最佳方案确定为 Bash REST 轮询（OS信号驱动），set_watch_output 降为备选；工具总数 18
+  2026-07-06 | kimi-code (feature) | watch_session/get_watch_result/continue_watch/set_watch_output 4工具: WS后台监听+自动化循环+文件输出
   2026-07-06 | kimi-code (feature) | 自适应工作流引擎：learn/execute/list/continue_workflow 4工具 + 模板存储 + 监管页面
   2026-07-06 | kimi-code (architecture) | 架构深化：消除 9 文件 584 行死代码，拆分 session-manager 为 store+reader，消除 3 个单例为 DI
   2026-07-06 | kimi-code (tools) | 新增 3 个 MCP 工具（list_io_records/create_session/poll_session），总计 10 工具；execute_prompt/chat_with_session 新增 auto_mode + wait 参数
@@ -106,6 +106,7 @@ Tunnel 启动后自动连接 Kimi Server 并选择最近的 session。
 | `watch_session` | 启动 WS 后台监听，主动等待任务 session 完成 |
 | `get_watch_result` | 获取后台监听结果（非阻塞） |
 | `continue_watch` | 拿结果+自动发下一步指令+启动新监听，形成自动化循环 |
+| `set_watch_output` | 设置监听输出文件，完成后自动写入结果到本地文件 |
 
 ## REST API
 
@@ -138,7 +139,7 @@ curl -X POST http://localhost:3456/api/execute \
 src/
 ├── index.ts                 # 入口：创建 TunnelServices，启动 HTTP+MCP
 ├── types.ts                 # TunnelServices 依赖注入接口
-├── mcp-server.ts            # MCP stdio 服务器（注册 17 个工具）
+├── mcp-server.ts            # MCP stdio 服务器（注册 18 个工具）
 ├── http-server.ts           # Express + WebSocket 装配入口
 ├── wire-client.ts           # Kimi Server REST + WS 推送客户端
 ├── message-queue.ts         # WebSocket pub/sub 广播
@@ -164,8 +165,8 @@ src/
 │   ├── execute-workflow.ts  # 执行工作流模板
 │   ├── list-workflow-templates.ts # 列出可用模板
 │   ├── continue-workflow.ts # 暂停工作流的决策处理
-│   ├── session-watch.ts     # 后台监听工具 (watch/get/continue)
-│   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间
+│   ├── session-watch.ts     # 后台监听工具 (watch/get/continue/set_watch)
+│   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间（含 wsConnected）
 └── public/
     ├── console.html          # Web 调试控制台
     └── workflow-console.html # 工作流实时监管页面

@@ -1,7 +1,7 @@
 <!--
 修改记录:
-  2026-07-06 | kimi-code (feature) | 新增 watch_session/get_watch_result/continue_watch 3工具：SessionWatcher WS后台监听 + 自动化循环
-  2026-07-06 | kimi-code (bugfix) | 修复 /auto 文本注入触发LLM自主处理 → 改用 REST API permission_mode；execute_prompt wait=false 未传 autoApprove
+  2026-07-06 | kimi-code (arch) | 确定后台监听最佳方案：Bash REST 轮询（OS进程信号驱动，零开销），set_watch_output 降为备选；修复 WS 直接帧处理、ESM require 兼容
+  2026-07-06 | kimi-code (feature) | 新增 watch_session/get_watch_result/continue_watch/set_watch_output 4工具：WS 后台监听 + 自动化循环 + 文件输出
   2026-07-06 | kimi-code (architecture) | 架构深化 8/8 项：删除 session-manager+flowOrchestrator、message-queue简化为pub/sub、WireClientFactory DI、run_flow统一到WorkflowEngine、WS推送状态缓存、poll_session WS快路径
   2026-07-06 | kimi-code (bugfix) | selftest 修复：WireClient.connect 缺失、activeExecutions 泄漏、model/thinking 参数被忽略、escapeYaml 转义不完整
   2026-07-06 | kimi-code (feature) | 新增自适应工作流引擎：learn_workflow/execute_workflow/list_templates/continue_workflow 4个工具 + 模板存储 + Web 监管页面
@@ -36,7 +36,7 @@
 src/
 ├── index.ts                 # 入口：创建 TunnelServices，启动 HTTP+MCP 双服务器
 ├── types.ts                 # TunnelServices 接口（wireClient, messageQueue, startTime, workflowEngine）
-├── mcp-server.ts            # MCP stdio 服务器，注册全部 17 个工具
+├── mcp-server.ts            # MCP stdio 服务器，注册全部 18 个工具
 ├── http-server.ts           # Express + WebSocket 装配入口（薄层）
 ├── wire-client.ts           # Kimi Server REST + WS 推送客户端（状态缓存）
 ├── message-queue.ts         # WebSocket 客户端注册 + pub/sub 广播（简化为 67 行）
@@ -117,42 +117,34 @@ npm run inspector    # MCP Inspector 调试模式
 
 ## 标准工作流
 
-全自动 session 编排的标准流程（所有工具 `wait` 默认 `false`，即发即返）：
+全自动 session 编排的标准流程：
+
+### 推荐：Bash 后台 REST 轮询（零 token 等待）
 
 ```
 ① create_session(cwd, permission_mode="auto")
-   → { session_id: "session_xxx" }
-
-② chat_with_session(session_id, task, auto_mode=true)
-   或 execute_prompt(session_id, task, auto_mode=true)
+② execute_prompt(session_id, task, auto_mode=true)
    → { submitted: true }
 
-③ watch_session(session_id)          ← tunnel 后台主动监听，每 3s WS 检查
-   → { watch_id: "watch_xxx" }
+③ Bash(run_in_background=true):
+   while true; do
+     status=$(curl /sessions/$SID/status)
+     if idle → curl /sessions/$SID/messages → 输出结果; break
+     sleep 2
+   done
 
-④ ... 统筹 session 可做其他工作 ...
+④ 统筹 session 继续交互（不阻塞）
+⑤ 后台进程完成 → 自动通知 → 读取输出拿到回复
+```
 
-⑤ continue_watch(watch_id, next_instruction)  ← 拿到回复 + 自动发下一步
+**原理**：Kimi Code 后台任务基于操作系统进程退出信号，零 CPU 轮询开销。bash 进程 curl 等到 idle 后退出 → runtime 注入 `<notification>` 到统筹 session。
+
+### 备选：MCP 内部工具（轻量场景）
+
+```
+③ watch_session(session_id)           ← tunnel WS/轮询监听
+④ continue_watch(watch_id, next)     ← 拿回复+自动发下一步
    → { ready: true, result: "...", next_watch_id: "w2" }
-
-⑥ 循环 ⑤：分析 result → 决定下一步 → continue_watch(w2, next)
-
-### 自动化循环示例
-
-```
-w = watch_session(session_id)
-循环:
-  r = continue_watch(w, "下一步指令")
-  if r.ready → 分析 r.result, 决定下一步, w = r.next_watch_id
-  else → 等几秒再调
-```
-```
-
-### 备选：手动轮询（兼容旧流程）
-
-```
-③ poll_session(session_id)            ← WS 缓存零 I/O 查询
-④ list_io_records(session_id)         ← 查看对话摘要
 ```
 
 ### 工作流引擎（模板驱动多步编排）
