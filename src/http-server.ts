@@ -4,13 +4,14 @@ import { WebSocketServer, WebSocket } from "ws";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
-import { messageQueue, type WebSocketClient } from "./message-queue.js";
-import { wireClient } from "./wire-client.js";
+import type { TunnelServices } from "./types.js";
+import type { WebSocketClient } from "./message-queue.js";
 import { randomUUID } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function startHttpServer(port: number): void {
+export function startHttpServer(port: number, services: TunnelServices): void {
+  const { wireClient, messageQueue } = services;
   const app = express();
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });

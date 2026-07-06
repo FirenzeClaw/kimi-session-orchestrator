@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { wireClient } from "../wire-client.js";
+import type { TunnelServices } from "../types.js";
 
-export function registerExecutePrompt(server: McpServer): void {
+export function registerExecutePrompt(server: McpServer, services: TunnelServices): void {
+  const { wireClient } = services;
   server.tool(
     "execute_prompt",
     "向目标 session 发送 prompt 并等待完整回复。通过 Kimi Server REST API 直接通信。默认排除思考链内容以节省 token。若回复模糊，可设置 include_thinking 获取思考内容确认意图。",
@@ -21,8 +22,20 @@ export function registerExecutePrompt(server: McpServer): void {
         .max(600000)
         .default(300000)
         .describe("等待超时毫秒数，默认 5 分钟"),
+      auto_mode: z
+        .boolean()
+        .default(false)
+        .describe(
+          "启用自动模式：自动审批所有工具调用（scope=session），无需人工确认。默认 false。"
+        ),
+      wait: z
+        .boolean()
+        .default(false)
+        .describe(
+          "是否等待 session 完成回复。默认 false（即发即返），true 时阻塞等待完整回复。建议用 list_io_records 轮询进度。"
+        ),
     },
-    async ({ session_id, prompt, include_thinking, timeout_ms }) => {
+    async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait }) => {
       if (!wireClient.isConnected()) {
         return {
           content: [
@@ -37,9 +50,33 @@ export function registerExecutePrompt(server: McpServer): void {
 
       try {
         wireClient.setSessionId(session_id);
+
+        if (!wait) {
+          // Fire-and-forget: submit prompt, return immediately
+          const { promptId } = await wireClient.submitPrompt(prompt);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    submitted: true,
+                    session_id,
+                    prompt_id: promptId,
+                    hint: "prompt 已提交，session 正在处理。请用 list_io_records 或 read_session_log 跟踪进度。",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
         const response = await wireClient.sendPrompt(prompt, {
           timeoutMs: timeout_ms,
           includeThinking: include_thinking,
+          autoApprove: auto_mode,
         });
 
         const result: Record<string, unknown> = {
@@ -65,11 +102,16 @@ export function registerExecutePrompt(server: McpServer): void {
           ],
         };
       } catch (err) {
+        const msg = (err as Error).message;
+        const isTimeout = /timeout|timed out/i.test(msg);
+        const hint = isTimeout
+          ? `\n\n提示：目标 session 可能正忙（mid-turn）。prompt 可能已成功注入，但响应等待超时。请用 read_session_log / list_io_records 检查 session 是否已开始处理。`
+          : `\n\n提示：请确认 Kimi Server 正在运行（kimi web --no-open）且 session 可访问。`;
         return {
           content: [
             {
               type: "text",
-              text: `执行失败: ${(err as Error).message}`,
+              text: `执行失败: ${msg}${hint}`,
             },
           ],
           isError: true,

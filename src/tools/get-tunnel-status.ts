@@ -1,10 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { messageQueue } from "../message-queue.js";
-import { wireClient } from "../wire-client.js";
+import type { TunnelServices } from "../types.js";
 
-let startTime = Date.now();
+export function registerGetTunnelStatus(server: McpServer, services: TunnelServices): void {
+  const { messageQueue, wireClient, startTime } = services;
 
-export function registerGetTunnelStatus(server: McpServer): void {
   server.tool(
     "get_tunnel_status",
     "获取调试隧道当前状态：已连接客户端数、Wire 协议连接状态、消息队列长度、运行时间。",

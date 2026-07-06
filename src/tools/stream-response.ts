@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { messageQueue } from "../message-queue.js";
+import type { TunnelServices } from "../types.js";
 
-export function registerStreamResponse(server: McpServer): void {
+export function registerStreamResponse(server: McpServer, services: TunnelServices): void {
+  const { messageQueue } = services;
   server.tool(
     "stream_response",
     "将处理结果实时推送给所有连接的外部调试客户端。客户端通过 WebSocket 实时接收响应，无需轮询。",

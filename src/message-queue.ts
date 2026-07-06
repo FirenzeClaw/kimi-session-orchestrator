@@ -92,5 +92,3 @@ export class MessageQueue {
     };
   }
 }
-
-export const messageQueue = new MessageQueue();

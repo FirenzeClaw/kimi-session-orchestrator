@@ -1,4 +1,4 @@
-import { wireClient, type TurnPromptResponse } from "./wire-client.js";
+import type { WireClient, TurnPromptResponse } from "./wire-client.js";
 
 export interface OrchestrationResult {
   success: boolean;
@@ -17,12 +17,14 @@ export interface OrchestrationResult {
  * or call withCheckThinking: true to auto-include thinking when the response is ambiguous.
  */
 export async function orchestrateTask(
+  wireClient: WireClient,
   sessionId: string,
   taskDescription: string,
   options: {
     maxTurns?: number;
     includeThinking?: boolean;
     withCheckThinking?: boolean;
+    autoApprove?: boolean;
     onProgress?: (turn: number, text: string) => void;
   } = {}
 ): Promise<OrchestrationResult> {
@@ -30,6 +32,7 @@ export async function orchestrateTask(
     maxTurns = 10,
     includeThinking = false,
     withCheckThinking = false,
+    autoApprove = false,
     onProgress,
   } = options;
 
@@ -42,7 +45,7 @@ export async function orchestrateTask(
       turns++;
       const response: TurnPromptResponse = await wireClient.sendPrompt(
         currentPrompt,
-        { timeoutMs: 600000 }
+        { timeoutMs: 600000, autoApprove }
       );
 
       let responseText = response.finalText.trim();

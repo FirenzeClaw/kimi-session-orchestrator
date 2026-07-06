@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { WireClient } from "./wire-client.js";
+import { MessageQueue } from "./message-queue.js";
+import type { TunnelServices } from "./types.js";
 import { startMcpServer } from "./mcp-server.js";
 import { startHttpServer } from "./http-server.js";
-import { wireClient } from "./wire-client.js";
 import { listSessions } from "./session-manager.js";
 
 const PORT = parseInt(process.env.TUNNEL_PORT || "3456", 10);
@@ -9,8 +11,12 @@ const PORT = parseInt(process.env.TUNNEL_PORT || "3456", 10);
 async function main(): Promise<void> {
   process.stderr.write("[kimi-debug-tunnel] v2.0.0 Starting...\n");
 
+  const wireClient = new WireClient();
+  const messageQueue = new MessageQueue();
+  const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now() };
+
   // Start HTTP + WebSocket server for external clients
-  startHttpServer(PORT);
+  startHttpServer(PORT, services);
 
   // Connect to Kimi server via REST API
   try {

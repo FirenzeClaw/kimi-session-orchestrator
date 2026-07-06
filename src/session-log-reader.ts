@@ -1,8 +1,10 @@
-import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import type { LogEntry, SessionLog } from "./session-manager.js";
+import { join } from "node:path";
+import { findSessionPath } from "./session-store.js";
 
-function extractPromptText(entry: Record<string, unknown>): string {
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+export function extractPromptText(entry: Record<string, unknown>): string {
   const input = entry.input as Array<{ type: string; text: string }> | undefined;
   if (!input) return "";
   for (const part of input) {
@@ -13,17 +15,67 @@ function extractPromptText(entry: Record<string, unknown>): string {
   return "";
 }
 
-function truncateText(text: string, maxLen: number): string {
+export function truncateText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen) + "...";
 }
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  line: number;
+  type: string;
+  content: string;
+  time: number;
+  turnId?: string;
+  step?: number;
+}
+
+export interface SessionLog {
+  sessionId: string;
+  totalLines: number;
+  recentEntries: LogEntry[];
+  lastTurnPrompt: LogEntry | null;
+  lastAssistantText: LogEntry | null;
+  lastToolCalls: string[];
+  lastTurnComplete: boolean;
+  lastTurnFinishReason: string | null;
+}
+
+export interface IORecord {
+  turn: number;
+  type: "user" | "assistant";
+  content: string;
+  time: number;
+  stepCount?: number;
+}
+
+export interface IORecordsResult {
+  sessionId: string;
+  totalTurns: number;
+  records: IORecord[];
+}
+
+export interface SessionStatus {
+  sessionId: string;
+  state: "active" | "swarm" | "awaiting_approval" | "done" | "error" | "idle";
+  totalLines: number;
+  lastTurn: number;
+  toolCallsInTurn: number;
+  complete: boolean;
+  alerts: string[];
+}
+
+// ── Log reading ────────────────────────────────────────────────────────────────
+
 export async function readSessionLog(
-  sessionPath: string,
   sessionId: string,
   options: { afterLine?: number; limit?: number; includeThinking?: boolean } = {}
 ): Promise<SessionLog | null> {
   const { afterLine = 0, limit = 50, includeThinking = false } = options;
+
+  const sessionPath = await findSessionPath(sessionId);
+  if (!sessionPath) return null;
 
   const wirePath = join(sessionPath, "agents", "main", "wire.jsonl");
 
@@ -120,7 +172,10 @@ export async function readSessionLog(
             entry.type === "context.append_loop_event" &&
             entry.event?.type === "tool.call"
           ) {
-            content = `${entry.event.name}(${JSON.stringify(entry.event.args || {})})`;
+            content = truncateText(
+              `${entry.event.name}(${JSON.stringify(entry.event.args || {})})`,
+              200
+            );
             entryType = "tool_call";
           } else if (
             entry.type === "context.append_loop_event" &&
@@ -146,7 +201,9 @@ export async function readSessionLog(
       }
     }
 
-    const recentEntries = entries.slice(-limit);
+    const recentEntries = afterLine === 0
+      ? entries.slice(0, limit)
+      : entries.slice(-limit);
 
     return {
       sessionId,
@@ -157,6 +214,161 @@ export async function readSessionLog(
       lastToolCalls,
       lastTurnComplete,
       lastTurnFinishReason,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── IO records ─────────────────────────────────────────────────────────────────
+
+export async function listIORecords(
+  sessionId: string,
+  options: { limit?: number } = {}
+): Promise<IORecordsResult | null> {
+  const { limit = 40 } = options;
+
+  const sessionPath = await findSessionPath(sessionId);
+  if (!sessionPath) return null;
+
+  const wirePath = join(sessionPath, "agents", "main", "wire.jsonl");
+
+  try {
+    const raw = await readFile(wirePath, "utf-8");
+    const lines = raw.split("\n").filter((l) => l.trim());
+
+    const records: IORecord[] = [];
+    let turnIndex = 0;
+    let stepCount = 0;
+    let lastAssistantText = "";
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (entry.type === "turn.prompt" && entry.time) {
+          if (lastAssistantText) {
+            records.push({
+              turn: turnIndex,
+              type: "assistant",
+              content: lastAssistantText,
+              time: 0,
+              stepCount,
+            });
+            lastAssistantText = "";
+          }
+
+          turnIndex++;
+          stepCount = 0;
+
+          const prompt = extractPromptText(entry);
+          records.push({
+            turn: turnIndex,
+            type: "user",
+            content: prompt,
+            time: entry.time,
+          });
+        }
+
+        if (entry.type === "context.append_loop_event") {
+          if (entry.event?.type === "content.part" && entry.event?.part?.type === "text") {
+            lastAssistantText = entry.event.part.text;
+          }
+          if (entry.event?.type === "tool.call") {
+            stepCount++;
+          }
+        }
+      } catch {
+        // skip
+      }
+    }
+
+    if (lastAssistantText) {
+      records.push({
+        turn: turnIndex,
+        type: "assistant",
+        content: lastAssistantText,
+        time: 0,
+        stepCount,
+      });
+    }
+
+    return {
+      sessionId,
+      totalTurns: turnIndex,
+      records: records.slice(-limit),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Status polling ─────────────────────────────────────────────────────────────
+
+export async function pollSessionStatus(sessionId: string): Promise<SessionStatus | null> {
+  const sessionPath = await findSessionPath(sessionId);
+  if (!sessionPath) return null;
+
+  const wirePath = join(sessionPath, "agents", "main", "wire.jsonl");
+
+  try {
+    const raw = await readFile(wirePath, "utf-8");
+    const lines = raw.split("\n").filter((l) => l.trim());
+    const tailSize = Math.min(lines.length, 15);
+    const recentLines = lines.slice(-tailSize);
+
+    let isAwaiting = false;
+    let hasEndTurn = false;
+    let hasToolCall = false;
+    let hasError = false;
+    let inSwarm = false;
+    let lastTurn = 0;
+    let toolCallsInTurn = 0;
+
+    for (const line of recentLines) {
+      try {
+        const entry = JSON.parse(line);
+        const type = entry.type || "";
+
+        if (type === "turn.prompt") lastTurn++;
+        if (type.includes("awaiting_approval")) isAwaiting = true;
+        if (type === "context.append_loop_event") {
+          const eventType = entry.event?.type || "";
+          if (eventType === "step.end" && entry.event?.finishReason === "end_turn") hasEndTurn = true;
+          if (eventType === "tool.call") { hasToolCall = true; toolCallsInTurn++; }
+        }
+        if (type.includes("error")) hasError = true;
+        if (JSON.stringify(entry).includes("swarm")) inSwarm = true;
+      } catch { /* skip */ }
+    }
+
+    let state: SessionStatus["state"];
+    const alerts: string[] = [];
+
+    if (isAwaiting && !hasToolCall) {
+      state = "awaiting_approval";
+      alerts.push("Session 等待工具审批 — auto_mode 可能未生效");
+    } else if (hasEndTurn && !hasToolCall) {
+      state = "done";
+    } else if (inSwarm) {
+      state = "swarm";
+    } else if (hasToolCall) {
+      state = "active";
+    } else if (hasError) {
+      state = "error";
+      alerts.push("检测到错误条目");
+    } else {
+      state = "idle";
+    }
+
+    return {
+      sessionId,
+      state,
+      totalLines: lines.length,
+      lastTurn,
+      toolCallsInTurn,
+      complete: state === "done",
+      alerts,
     };
   } catch {
     return null;

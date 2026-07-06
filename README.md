@@ -1,8 +1,7 @@
 <!--
 修改记录:
-  2026-07-05 | kimi-code (md-update) | 更新项目结构树：新增 routes/ types.ts kimi-api-transport.ts content-processor.ts ws-handler.ts session-store.ts session-log-reader.ts
-  2026-07-05 | kimi-code (md-update) | 修正 /api/send 描述：已改为直接调用 WireClient 而非队列
-  2026-07-05 | kimi-code (refactor)   | 架构深化：删除 v1 死代码，引入 TunnelServices DI，拆分 WireClient/HTTP/Session 模块
+  2026-07-06 | kimi-code (architecture) | 架构深化：消除 9 文件 584 行死代码，拆分 session-manager 为 store+reader，消除 3 个单例为 DI
+  2026-07-06 | kimi-code (tools) | 新增 3 个 MCP 工具（list_io_records/create_session/poll_session），总计 10 工具；execute_prompt/chat_with_session 新增 auto_mode + wait 参数
   2026-07-06 | kimi-code (bugfix) | 修复 EADDRINUSE 多 session 冲突：http-server.ts 添加双重错误处理避免 MCP 崩溃
   2026-07-05 | FirenzeClaw            | 初始版本
 -->
@@ -85,12 +84,15 @@ Tunnel 启动后自动连接 Kimi Server 并选择最近的 session。
 
 | 工具 | 描述 |
 |------|------|
-| `execute_prompt` | 发送 prompt 并等待完整回复，默认排除思考链 |
-| `chat_with_session` | 全自动多轮编排，直到任务完成或达到最大轮次 |
-| `stream_response` | 实时推送结果到所有 WebSocket 客户端 |
+| `execute_prompt` | 发送 prompt 并等待回复（支持 `auto_mode` + `wait` 即发即返） |
+| `chat_with_session` | 全自动多轮编排，支持 `auto_mode` + `wait` 即发即返 |
+| `create_session` | 创建新 session，支持指定工作目录和权限模式（auto/manual/yolo） |
 | `list_sessions` | 列出所有 session |
-| `get_session_info` | 查看 session 详情 |
-| `read_session_log` | 读取对话日志，检测 turn 完成状态 |
+| `get_session_info` | 查看 session 详情（含 wire.jsonl 路径） |
+| `read_session_log` | 读取对话日志，支持分页和增量读取 |
+| `list_io_records` | 快速提取输入输出记录，过滤工具调用/思考链噪音 |
+| `poll_session` | 结构化轮询 session 运行状态（active/swarm/awaiting/done/error/idle） |
+| `stream_response` | 实时推送结果到所有 WebSocket 客户端 |
 | `get_tunnel_status` | Wire 连接状态、客户端数、运行时间 |
 
 ## REST API
@@ -123,29 +125,24 @@ curl -X POST http://localhost:3456/api/execute \
 src/
 ├── index.ts                 # 入口：创建 TunnelServices，启动 HTTP+MCP
 ├── types.ts                 # TunnelServices 依赖注入接口
-├── mcp-server.ts            # MCP stdio 服务器（注册 7 个工具）
+├── mcp-server.ts            # MCP stdio 服务器（注册 10 个工具）
 ├── http-server.ts           # Express + WebSocket 装配入口
-├── wire-client.ts           # Prompt 执行器（使用 Transport + ContentProcessor）
-├── kimi-api-transport.ts    # 纯 HTTP 传输适配器（GET/POST + auth）
-├── content-processor.ts     # 纯函数：文本提取、思考过滤
+├── wire-client.ts           # Kimi Server REST API 客户端
 ├── message-queue.ts         # WebSocket 客户端管理 + 响应广播
-├── ws-handler.ts            # WebSocket 连接处理器
 ├── session-manager.ts       # Session 管理薄委托层
-├── session-store.ts         # 文件系统扫描 + 缓存
-├── session-log-reader.ts    # wire.jsonl 日志解析器
+├── session-store.ts         # 文件系统扫描 + 路径解析
+├── session-log-reader.ts    # wire.jsonl 日志解析 + IO 提取 + 状态轮询
 ├── session-orchestrator.ts  # 多轮任务编排引擎
-├── routes/
-│   ├── console.ts           # GET /   Web 调试控制台
-│   ├── execute.ts           # POST /api/execute
-│   ├── send.ts              # POST /api/send
-│   └── status.ts            # GET /api/status
 ├── tools/
 │   ├── execute-prompt.ts    # 发送 prompt 并等待完整回复
 │   ├── chat-with-session.ts # 全自动多轮编排
+│   ├── create-session.ts    # 通过 REST API 创建新 session
 │   ├── stream-response.ts   # 实时推送到 WebSocket 客户端
 │   ├── list-sessions.ts     # 列出所有 session
 │   ├── get-session-info.ts  # 查看 session 详情
 │   ├── read-session-log.ts  # 读取对话日志
+│   ├── list-io-records.ts   # 快速查看输入输出记录
+│   ├── poll-session.ts      # 结构化轮询 session 状态
 │   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间
 └── public/
     └── console.html          # Web 调试控制台

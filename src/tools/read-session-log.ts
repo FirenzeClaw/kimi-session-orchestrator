@@ -14,7 +14,9 @@ export function registerReadSessionLog(server: McpServer): void {
         .number()
         .min(0)
         .default(0)
-        .describe("仅返回该行号之后的条目（增量读取），首次调用传 0"),
+        .describe(
+          "起始行号。传 0 从日志开头返回前 N 条；传 >0 仅返回该行号之后的增量条目。"
+        ),
       limit: z
         .number()
         .min(1)

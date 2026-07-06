@@ -41,6 +41,14 @@ export interface TurnPromptResponse {
   messages: KimiContentBlock[];
 }
 
+export interface CreateSessionOptions {
+  cwd: string;
+  title?: string;
+  permissionMode?: "manual" | "yolo" | "auto";
+  model?: string;
+  thinking?: string;
+}
+
 export class WireClient {
   private baseUrl: string;
   private token: string;
@@ -65,6 +73,35 @@ export class WireClient {
 
   setToken(token: string): void {
     this.token = token;
+  }
+
+  /**
+   * Create a new session via the Kimi Server REST API.
+   */
+  async createSession(options: CreateSessionOptions): Promise<{ sessionId: string; title: string }> {
+    const body: Record<string, unknown> = {
+      metadata: { cwd: options.cwd },
+      agent_config: {},
+    };
+    if (options.title) body.title = options.title;
+    if (options.permissionMode) {
+      (body.agent_config as Record<string, unknown>).permission_mode = options.permissionMode;
+    }
+    if (options.model) {
+      (body.agent_config as Record<string, unknown>).model = options.model;
+    }
+    if (options.thinking) {
+      (body.agent_config as Record<string, unknown>).thinking = options.thinking;
+    }
+
+    const resp = await this.apiPost<{ id: string; title: string }>(
+      "/api/v1/sessions",
+      body
+    );
+    process.stderr.write(
+      `[wire-client] Created session ${resp.id} (cwd: ${options.cwd}, permission: ${options.permissionMode || "default"})\n`
+    );
+    return { sessionId: resp.id, title: resp.title };
   }
 
   async connect(): Promise<void> {
@@ -108,6 +145,25 @@ export class WireClient {
   }
 
   /**
+   * Submit a prompt without waiting for completion. Returns prompt_id immediately.
+   * Use read_session_log or list_io_records to track progress.
+   */
+  async submitPrompt(prompt: string): Promise<{ promptId: string }> {
+    if (!this.connected) {
+      throw new Error("Wire client not connected");
+    }
+    if (!this.sessionId) {
+      throw new Error("No session ID set.");
+    }
+
+    const resp = await this.apiPost<{ prompt_id: string }>(
+      `/api/v1/sessions/${this.sessionId}/prompts`,
+      { content: [{ type: "text", text: prompt }] }
+    );
+    return { promptId: resp.prompt_id };
+  }
+
+  /**
    * Send a prompt and wait for the complete response.
    * By default, thinking content is excluded from finalText.
    */
@@ -116,9 +172,10 @@ export class WireClient {
     options: {
       timeoutMs?: number;
       includeThinking?: boolean;
+      autoApprove?: boolean;
     } = {}
   ): Promise<TurnPromptResponse> {
-    const { timeoutMs = 300000, includeThinking = false } = options;
+    const { timeoutMs = 300000, includeThinking = false, autoApprove = false } = options;
 
     if (!this.connected) {
       throw new Error("Wire client not connected");
@@ -154,6 +211,11 @@ export class WireClient {
         const statusResp = await this.apiGet<{ status: string }>(
           `/api/v1/sessions/${this.sessionId}/status`
         );
+
+        // Auto-approve pending approvals if enabled
+        if (autoApprove && statusResp.status === "awaiting_approval") {
+          await this.approveAll(this.sessionId);
+        }
 
         // Fetch new messages
         const params = new URLSearchParams({
@@ -231,6 +293,31 @@ export class WireClient {
     return messages.filter((b) => b.type !== "thinking");
   }
 
+  /**
+   * Auto-approve all pending approval requests for a session.
+   * Uses session-scoped approval to enable auto mode for the entire session.
+   */
+  private async approveAll(sessionId: string): Promise<void> {
+    try {
+      const approvalsResp = await this.apiGet<{
+        items: Array<{ approval_id: string }>;
+      }>(`/api/v1/sessions/${sessionId}/approvals?status=pending`);
+
+      const items = approvalsResp.items || [];
+      for (const item of items) {
+        await this.apiPost(
+          `/api/v1/sessions/${sessionId}/approvals/${item.approval_id}`,
+          { decision: "approved", scope: "session" }
+        );
+        process.stderr.write(
+          `[wire-client] Auto-approved ${item.approval_id} (session scope)\n`
+        );
+      }
+    } catch {
+      // Ignore approval errors — session may not have pending approvals
+    }
+  }
+
   async close(): Promise<void> {
     this.connected = false;
   }
@@ -284,5 +371,3 @@ export class WireClient {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-export const wireClient = new WireClient();
