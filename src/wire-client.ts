@@ -395,7 +395,7 @@ export class WireClient {
             }
             if (text) break;
           }
-          if (text) {
+          if (text || status === "idle" || status === "aborted") {
             try {
               const { writeFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
               const { dirname } = require("node:path") as typeof import("node:path");
@@ -403,7 +403,7 @@ export class WireClient {
               writeFileSync(this.watchOutputPath!, JSON.stringify({
                 sessionId: this.sessionId,
                 status: "completed",
-                result: text,
+                result: text || "(completed — tool calls only, no text reply)",
                 completedAt: new Date().toISOString(),
                 source: "poll_fallback",
               }, null, 2), "utf-8");
