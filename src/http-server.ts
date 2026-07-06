@@ -38,6 +38,19 @@ export function startHttpServer(port: number, services: TunnelServices): void {
     res.type("html").send(consoleHtml);
   });
 
+  // Serve workflow console
+  const workflowConsoleHtmlPath = join(__dirname, "public", "workflow-console.html");
+  let workflowConsoleHtml: string;
+  try {
+    workflowConsoleHtml = readFileSync(workflowConsoleHtmlPath, "utf-8");
+  } catch {
+    workflowConsoleHtml = "<html><body><h1>Workflow Console not found</h1></body></html>";
+  }
+
+  app.get("/workflow-console.html", (_req, res) => {
+    res.type("html").send(workflowConsoleHtml);
+  });
+
   // REST API: execute prompt directly via Wire protocol (push-based)
   app.post("/api/execute", async (req, res) => {
     const { prompt, timeout_ms, include_thinking } = req.body;

@@ -33,52 +33,19 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
         .boolean()
         .default(false)
         .describe(
-          "是否等待编排完成。默认 false（即发即返），true 时阻塞等待全部轮次完成。建议用 list_io_records 轮询进度。"
+          "已废弃。受 MCP 超时限制，始终即发即返。用 poll_session / list_io_records 轮询进度。"
         ),
     },
     async ({ session_id, task, max_turns, include_thinking, auto_mode, wait }) => {
       if (!wireClient.isConnected()) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      wireClient.setSessionId(session_id);
-
-      if (!wait) {
-        // Fire-and-forget: submit initial prompt, return immediately
         try {
-          const { promptId } = await wireClient.submitPrompt(task);
+          await wireClient.connect();
+        } catch {
           return {
             content: [
               {
                 type: "text",
-                text: JSON.stringify(
-                  {
-                    submitted: true,
-                    session_id,
-                    prompt_id: promptId,
-                    max_turns,
-                    hint: "任务已提交，session 正在处理。请用 list_io_records 或 read_session_log 跟踪进度。",
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        } catch (err) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `提交失败: ${(err as Error).message}`,
+                text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
               },
             ],
             isError: true,
@@ -86,35 +53,41 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
         }
       }
 
-      const result = await orchestrateTask(wireClient, session_id, task, {
-        maxTurns: max_turns,
-        includeThinking: include_thinking,
-        withCheckThinking: !include_thinking,
-        autoApprove: auto_mode,
-      });
+      wireClient.setSessionId(session_id);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                success: result.success,
-                turns: result.turns,
-                result: result.finalResponse,
-                summary: result.summary,
-                error: result.error,
-                hint: result.error && /timeout|timed out/i.test(result.error)
-                  ? "目标 session 可能正忙。prompt 可能已注入——请用 read_session_log 或 list_io_records 检查进度。"
-                  : undefined,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: !result.success,
-      };
+      // Always fire-and-forget: orchestrateTask blocks up to 10min which exceeds MCP timeout.
+      // Use list_io_records / poll_session to track progress.
+      try {
+        const { promptId } = await wireClient.submitPrompt(task, { autoApprove: auto_mode });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  submitted: true,
+                  session_id,
+                  prompt_id: promptId,
+                  max_turns,
+                  hint: "任务已提交，session 正在处理。请用 list_io_records 或 read_session_log 跟踪进度。",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `提交失败: ${(err as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 }

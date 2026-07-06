@@ -24,15 +24,19 @@ export function registerCreateSession(server: McpServer, services: TunnelService
     },
     async ({ cwd, title, permission_mode, model, thinking }) => {
       if (!wireClient.isConnected()) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
-            },
-          ],
-          isError: true,
-        };
+        try {
+          await wireClient.connect();
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       try {

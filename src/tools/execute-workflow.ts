@@ -1,0 +1,112 @@
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { TunnelServices } from "../types.js";
+import { loadTemplate } from "../workflow-store.js";
+import { WorkflowEngine } from "../workflow-engine.js";
+
+export function registerExecuteWorkflow(server: McpServer, services: TunnelServices): void {
+  const { wireClient } = services;
+
+  server.tool(
+    "execute_workflow",
+    "执行工作流模板：加载模板，创建任务 session，逐步下发指令，自适应调整，阻塞时暂停等待决策。",
+    {
+      template_name: z
+        .string()
+        .min(1)
+        .describe("模板名称，如 phase5-audit。可用 list_templates 查看可用模板。"),
+      cwd: z
+        .string()
+        .optional()
+        .describe("工作目录，覆盖模板中定义的 projectCwd"),
+      auto_mode: z
+        .boolean()
+        .default(true)
+        .describe("自动审批工具调用。默认 true。"),
+      model: z
+        .string()
+        .optional()
+        .describe("模型标识符"),
+      thinking: z
+        .enum(["off", "low", "medium", "high", "xhigh", "max"])
+        .optional()
+        .describe("思考级别"),
+    },
+    async ({ template_name, cwd, auto_mode, model, thinking }) => {
+      // Load template
+      const template = await loadTemplate(template_name);
+      if (!template) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `模板 "${template_name}" 未找到。用 list_templates 查看可用模板，或用 learn_workflow 创建新模板。`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Override cwd if provided
+      if (cwd) {
+        template.projectCwd = cwd;
+      }
+
+      // Override model/thinking if provided via agent_config
+      // (These are passed to createSession internally by WorkflowEngine)
+
+      if (!wireClient.isConnected()) {
+        try {
+          await wireClient.connect();
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      // Run engine
+      const engine = new WorkflowEngine(services);
+
+      // Start execution (async, non-blocking for the tool)
+      // The engine will push progress via WebSocket
+      engine
+        .execute(template, { autoMode: auto_mode, model, thinking })
+        .then((result) => {
+          process.stderr.write(
+            `[workflow-engine] "${template_name}" completed: ${result.status}\n`
+          );
+        })
+        .catch((err) => {
+          process.stderr.write(
+            `[workflow-engine] "${template_name}" failed: ${(err as Error).message}\n`
+          );
+        });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                submitted: true,
+                template: template_name,
+                steps: template.steps.length,
+                auto_mode,
+                hint: "工作流已启动。通过 WebSocket (ws://localhost:3456/ws) 或 workflow-console.html 查看实时进度。用 poll_session 跟踪任务 session。",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+}

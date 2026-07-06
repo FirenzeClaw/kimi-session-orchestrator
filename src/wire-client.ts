@@ -101,12 +101,33 @@ export class WireClient {
     process.stderr.write(
       `[wire-client] Created session ${resp.id} (cwd: ${options.cwd}, permission: ${options.permissionMode || "default"})\n`
     );
+
+    // Enable auto mode by sending /auto as the first prompt.
+    // The API's permission_mode field is not persisted, so we use the CLI command instead.
+    if (options.permissionMode === "auto") {
+      this.sessionId = resp.id;
+      try {
+        await this.sendPrompt("/auto", {
+          timeoutMs: 30000,
+          autoApprove: false,
+          includeThinking: false,
+        });
+        process.stderr.write(`[wire-client] Auto mode enabled on ${resp.id}\n`);
+      } catch {
+        process.stderr.write(`[wire-client] /auto on ${resp.id} failed (may already be auto)\n`);
+      }
+    }
+
     return { sessionId: resp.id, title: resp.title };
   }
 
   async connect(): Promise<void> {
-    if (!this.token) {
-      // Try to auto-detect token from running server
+    if (this.connected) return;
+
+    const maxRetries = 3;
+    const retryDelayMs = 2000;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const metaResp = await this.apiGet<{
           server_version: string;
@@ -114,29 +135,26 @@ export class WireClient {
         }>("/api/v1/meta");
         this.connected = true;
         process.stderr.write(
-          `[wire-client] Connected to Kimi server v${metaResp.server_version}\n`
+          `[wire-client] Connected to Kimi server v${metaResp.server_version} (session: ${this.sessionId || "none"})\n`
         );
         return;
       } catch (err) {
-        throw new Error(
-          `Cannot connect to Kimi server at ${this.baseUrl}. Start with: kimi web --no-open. Then set KIMI_SERVER_TOKEN env var.`
+        const isLastAttempt = attempt === maxRetries;
+        if (isLastAttempt) {
+          if (!this.token) {
+            throw new Error(
+              `Cannot connect to Kimi server at ${this.baseUrl}. Start with: kimi web --no-open. Then set KIMI_SERVER_TOKEN env var.`
+            );
+          }
+          throw new Error(
+            `Cannot connect to Kimi server at ${this.baseUrl}: ${(err as Error).message}`
+          );
+        }
+        process.stderr.write(
+          `[wire-client] Connection attempt ${attempt + 1} failed: ${(err as Error).message}. Retrying in ${retryDelayMs}ms...\n`
         );
+        await sleep(retryDelayMs);
       }
-    }
-
-    try {
-      const metaResp = await this.apiGet<{
-        server_version: string;
-        capabilities: Record<string, boolean>;
-      }>("/api/v1/meta");
-      this.connected = true;
-      process.stderr.write(
-        `[wire-client] Connected to Kimi server v${metaResp.server_version} (session: ${this.sessionId || "none"})\n`
-      );
-    } catch (err) {
-      throw new Error(
-        `Cannot connect to Kimi server at ${this.baseUrl}: ${(err as Error).message}`
-      );
     }
   }
 
@@ -147,13 +165,48 @@ export class WireClient {
   /**
    * Submit a prompt without waiting for completion. Returns prompt_id immediately.
    * Use read_session_log or list_io_records to track progress.
+   *
+   * When autoApprove is true, automatically approves pending approvals before submitting,
+   * and retries if session was awaiting_approval.
    */
-  async submitPrompt(prompt: string): Promise<{ promptId: string }> {
+  async submitPrompt(
+    prompt: string,
+    options: { autoApprove?: boolean } = {}
+  ): Promise<{ promptId: string }> {
+    const { autoApprove = false } = options;
+
     if (!this.connected) {
       throw new Error("Wire client not connected");
     }
     if (!this.sessionId) {
       throw new Error("No session ID set.");
+    }
+
+    // Guard: refuse to inject a prompt while tool_calls are in-flight.
+    // If autoApprove is on and session is awaiting_approval, approve all and retry.
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const status = await this.getSessionStatus();
+
+      if (status === "awaiting_approval" && autoApprove) {
+        await this.approveAll(this.sessionId);
+        await sleep(500);
+        continue;
+      }
+
+      if (status === "running") {
+        if (autoApprove && attempt < maxRetries - 1) {
+          await sleep(2000);
+          continue;
+        }
+        throw new Error(
+          `Session ${this.sessionId} is busy (status: ${status}). ` +
+          `Wait for the current turn to complete before sending a new prompt. ` +
+          `Use poll_session to check progress.`
+        );
+      }
+
+      break; // idle or unknown — proceed
     }
 
     const resp = await this.apiPost<{ prompt_id: string }>(
@@ -182,6 +235,34 @@ export class WireClient {
     }
     if (!this.sessionId) {
       throw new Error("No session ID set. Use list_sessions to find one.");
+    }
+
+    // Step 0: Wait for session to become ready (idle).
+    // Submitting mid-turn with in-flight tool_calls causes the LLM provider
+    // to reject with 400 "insufficient tool messages following tool_calls".
+    {
+      const maxPreWait = Math.min(timeoutMs, 60000); // up to 60s pre-submit wait
+      const preWaitStart = Date.now();
+      while (Date.now() - preWaitStart < maxPreWait) {
+        const currentStatus = await this.getSessionStatus();
+
+        if (currentStatus === "idle" || currentStatus === "unknown") break;
+
+        if (currentStatus === "awaiting_approval") {
+          if (!autoApprove) {
+            throw new Error(
+              `Session ${this.sessionId} is awaiting approval. ` +
+              `Enable auto_mode or approve manually before sending a new prompt.`
+            );
+          }
+          await this.approveAll(this.sessionId);
+          await sleep(500);
+          continue;
+        }
+
+        // "running" or other active state — wait
+        await sleep(1000);
+      }
     }
 
     // Step 1: Submit prompt
@@ -291,6 +372,21 @@ export class WireClient {
    */
   filterTextOnly(messages: KimiContentBlock[]): KimiContentBlock[] {
     return messages.filter((b) => b.type !== "thinking");
+  }
+
+  /**
+   * Query the session status from the Kimi Server.
+   * Returns "idle", "running", "awaiting_approval", or "unknown" on error.
+   */
+  async getSessionStatus(): Promise<string> {
+    try {
+      const resp = await this.apiGet<{ status: string }>(
+        `/api/v1/sessions/${this.sessionId}/status`
+      );
+      return resp.status || "unknown";
+    } catch {
+      return "unknown";
+    }
   }
 
   /**

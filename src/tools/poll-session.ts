@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { pollSessionStatus } from "../session-manager.js";
+import { flowOrchestrator } from "../flow-orchestrator.js";
 
 export function registerPollSession(server: McpServer): void {
   server.tool(
@@ -36,6 +37,9 @@ export function registerPollSession(server: McpServer): void {
         idle: "⏳ 空闲",
       };
 
+      // Check flow orchestrator for active flow on this session
+      const flow = flowOrchestrator.getFlow(session_id);
+
       return {
         content: [
           {
@@ -44,6 +48,14 @@ export function registerPollSession(server: McpServer): void {
               {
                 ...status,
                 stateLabel: stateLabels[status.state] || status.state,
+                ...(flow && {
+                  flow: {
+                    status: flow.status,
+                    currentStep: flow.currentStep + 1,
+                    totalSteps: flow.steps.length,
+                    error: flow.error,
+                  },
+                }),
               },
               null,
               2

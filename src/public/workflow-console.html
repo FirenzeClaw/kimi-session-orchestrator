@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workflow Console — Kimi Debug Tunnel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.4rem;
+      color: #7c83ff;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    .status-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #555;
+      display: inline-block;
+    }
+    .status-dot.connected { background: #4caf50; }
+    .status-dot.disconnected { background: #f44336; }
+    .card {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border-left: 3px solid #333;
+    }
+    .card.blocked { border-left-color: #f44336; background: #1e1626; }
+    .card.completed { border-left-color: #4caf50; }
+    .card.executing { border-left-color: #2196f3; }
+    .card h3 { font-size: 1rem; margin-bottom: 8px; }
+    .card .step-info {
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      margin: 8px 0;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2196f3, #7c83ff);
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .response-preview {
+      background: #0d1117;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 0.8rem;
+      color: #bbb;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 8px;
+      font-family: 'Consolas', monospace;
+    }
+    .alert {
+      background: rgba(244, 67, 54, 0.15);
+      border: 1px solid rgba(244, 67, 54, 0.4);
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 8px;
+      color: #f44336;
+      font-size: 0.85rem;
+    }
+    .alert strong { color: #ff6b6b; }
+    .timestamp {
+      font-size: 0.7rem;
+      color: #555;
+      margin-top: 8px;
+    }
+    .empty-state {
+      text-align: center;
+      color: #666;
+      padding: 60px 20px;
+    }
+    .empty-state p { margin-top: 8px; font-size: 0.9rem; }
+    .summary {
+      background: #0d2818;
+      border: 1px solid #2e7d32;
+      border-radius: 4px;
+      padding: 12px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #81c784;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 Workflow Console</h1>
+  <p class="subtitle">
+    WebSocket: <span id="wsStatus"><span class="status-dot disconnected"></span> Disconnected</span>
+  </p>
+
+  <div id="workflows"></div>
+  <div class="empty-state" id="emptyState">
+    <p>等待工作流执行...</p>
+    <p style="font-size:0.8rem;color:#555">用 execute_workflow 启动工作流后将在此显示实时进度</p>
+  </div>
+
+  <script>
+    const wsStatus = document.getElementById('wsStatus');
+    const workflowsEl = document.getElementById('workflows');
+    const emptyState = document.getElementById('emptyState');
+
+    // Track active workflows by executionId
+    const workflows = new Map();
+
+    function connect() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+      ws.onopen = () => {
+        wsStatus.innerHTML = '<span class="status-dot connected"></span> Connected';
+      };
+
+      ws.onclose = () => {
+        wsStatus.innerHTML = '<span class="status-dot disconnected"></span> Disconnected';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        wsStatus.innerHTML = '<span class="status-dot disconnected"></span> Error';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'workflow_progress') {
+            handleProgress(data);
+          } else if (data.type === 'workflow_complete') {
+            handleComplete(data);
+          }
+        } catch {}
+      };
+    }
+
+    function handleProgress(data) {
+      emptyState.style.display = 'none';
+      const { template, currentStep, totalSteps, stepId, sessionId, status, lastResponse, blockage, timestamp } = data;
+      const key = data.executionId || template;
+
+      let wf = workflows.get(key);
+      if (!wf) {
+        wf = {
+          template, currentStep, totalSteps, stepId, sessionId, status,
+          lastResponse, blockage, timestamp, steps: []
+        };
+        workflows.set(key, wf);
+      } else {
+        Object.assign(wf, { currentStep, totalSteps, stepId, status, lastResponse, blockage, timestamp });
+      }
+
+      wf.steps.push({ stepId, status, lastResponse, timestamp });
+      render();
+    }
+
+    function handleComplete(data) {
+      const { executionId, template, status, summary } = data;
+      const key = executionId || template;
+      let wf = workflows.get(key);
+      if (!wf) {
+        wf = { template, status, summary, timestamp: data.timestamp };
+        workflows.set(key, wf);
+      } else {
+        wf.status = status;
+        wf.summary = summary;
+      }
+      render();
+    }
+
+    function render() {
+      if (workflows.size === 0) {
+        emptyState.style.display = 'block';
+        workflowsEl.innerHTML = '';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      let html = '';
+      for (const [key, wf] of workflows) {
+        const progressPct = wf.totalSteps ? Math.round((wf.currentStep / wf.totalSteps) * 100) : 0;
+        let cardClass = 'card';
+        if (wf.status === 'blocked') cardClass += ' blocked';
+        else if (wf.status === 'completed') cardClass += ' completed';
+        else if (wf.status === 'executing' || wf.status === 'running') cardClass += ' executing';
+
+        html += `<div class="${cardClass}">`;
+        html += `<h3>${esc(wf.template)} <span style="color:#888;font-weight:normal;font-size:0.8rem">[${wf.status}]</span></h3>`;
+
+        if (wf.totalSteps) {
+          html += `<div class="step-info">Step ${wf.currentStep}/${wf.totalSteps}: ${esc(wf.stepId || '—')}</div>`;
+          html += `<div class="progress-bar"><div class="progress-fill" style="width:${progressPct}%"></div></div>`;
+        }
+
+        if (wf.sessionId) {
+          html += `<div class="step-info">Session: ${esc(wf.sessionId)}</div>`;
+        }
+
+        if (wf.lastResponse) {
+          html += `<div class="response-preview">${esc(wf.lastResponse)}</div>`;
+        }
+
+        if (wf.blockage) {
+          html += `<div class="alert"><strong>⚠ 阻塞: ${esc(wf.blockage.type || 'unknown')}</strong><br>${esc(wf.blockage.context || '')}<br>需要用户决策: ${wf.blockage.needsUserDecision ? '是' : '否'}</div>`;
+        }
+
+        if (wf.summary) {
+          html += `<div class="summary">${esc(wf.summary)}</div>`;
+        }
+
+        if (wf.timestamp) {
+          html += `<div class="timestamp">${new Date(wf.timestamp).toLocaleString()}</div>`;
+        }
+
+        html += `</div>`;
+      }
+
+      workflowsEl.innerHTML = html;
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    connect();
+  </script>
+</body>
+</html>

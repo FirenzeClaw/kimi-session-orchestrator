@@ -1,0 +1,34 @@
+# Workflow Template: phase5-audit
+# Version: 1.0
+# Generated: 2026-07-06
+
+name: "phase5-audit"
+version: "1.0"
+projectCwd: "D:/code/glass-desktop/scene"
+description: "Phase 5 audit workflow: read specs, audit completion, fix issues, run selftest, update docs"
+specDocs:
+  - "docs/we-analysis/00-指导文档.md"
+  - "docs/we-analysis/phase5-高级渲染.md"
+
+steps:
+  - id: "read-specs"
+    instruction: "阅读 docs/we-analysis/00-指导文档.md 和 phase5-高级渲染.md，理解规范要求"
+  - id: "audit"
+    instruction: "逐项检查 phase5 完成情况，查找错误、疏漏、偏差"
+  - id: "fix"
+    instruction: "实施所有发现的增补修复"
+  - id: "selftest"
+    instruction: "运行 /selftest 进行六维自审查"
+  - id: "update-docs"
+    instruction: "运行 /md-update 将变更同步到项目文档"
+    expectedOutcome: "[DONE]"
+
+blockagePolicy:
+  autoResolve:
+    - dependency_missing
+    - file_not_found
+  maxRetriesPerStep: 1
+
+timeout:
+  perStep: 600000
+  total: 3600000

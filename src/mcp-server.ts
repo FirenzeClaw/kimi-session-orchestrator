@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WireClient } from "./wire-client.js";
 import { MessageQueue } from "./message-queue.js";
+import { WorkflowEngine } from "./workflow-engine.js";
 import type { TunnelServices } from "./types.js";
 
 import { registerListSessions } from "./tools/list-sessions.js";
@@ -14,6 +15,11 @@ import { registerStreamResponse } from "./tools/stream-response.js";
 import { registerListIORecords } from "./tools/list-io-records.js";
 import { registerCreateSession } from "./tools/create-session.js";
 import { registerPollSession } from "./tools/poll-session.js";
+import { registerRunFlow } from "./tools/run-flow.js";
+import { registerLearnWorkflow } from "./tools/learn-workflow.js";
+import { registerExecuteWorkflow } from "./tools/execute-workflow.js";
+import { registerListTemplates } from "./tools/list-workflow-templates.js";
+import { registerContinueWorkflow } from "./tools/continue-workflow.js";
 
 const server = new McpServer({
   name: "kimi-debug-tunnel",
@@ -25,11 +31,13 @@ const server = new McpServer({
 function createServer(): { server: typeof server; services: TunnelServices } {
   const wireClient = new WireClient();
   const messageQueue = new MessageQueue();
-  const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now() };
+  const workflowEngine = new WorkflowEngine({ wireClient, messageQueue, startTime: Date.now() });
+  const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now(), workflowEngine };
 
   registerCreateSession(server, services);
   registerExecutePrompt(server, services);
   registerChatWithSession(server, services);
+  registerRunFlow(server, services);
   registerStreamResponse(server, services);
 
   registerListSessions(server);
@@ -37,6 +45,11 @@ function createServer(): { server: typeof server; services: TunnelServices } {
   registerReadSessionLog(server);
   registerListIORecords(server);
   registerPollSession(server);
+
+  registerLearnWorkflow(server);
+  registerListTemplates(server);
+  registerExecuteWorkflow(server, services);
+  registerContinueWorkflow(server, services);
 
   registerGetTunnelStatus(server, services);
 

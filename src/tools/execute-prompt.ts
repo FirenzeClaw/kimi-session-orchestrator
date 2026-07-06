@@ -32,20 +32,24 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
         .boolean()
         .default(false)
         .describe(
-          "是否等待 session 完成回复。默认 false（即发即返），true 时阻塞等待完整回复。建议用 list_io_records 轮询进度。"
+          "已废弃。受 MCP 超时限制，始终即发即返。用 poll_session / list_io_records 轮询进度。"
         ),
     },
     async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait }) => {
       if (!wireClient.isConnected()) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Wire client 未连接到 Kimi Server。请先执行 `kimi web --no-open` 启动，并设置 KIMI_SERVER_TOKEN 环境变量。",
-            },
-          ],
-          isError: true,
-        };
+        try {
+          await wireClient.connect();
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Wire client 未连接到 Kimi Server。请先执行 `kimi web --no-open` 启动，并设置 KIMI_SERVER_TOKEN 环境变量。",
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       try {
