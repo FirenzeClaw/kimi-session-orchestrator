@@ -15,6 +15,13 @@ export function startHttpServer(port: number): void {
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
+  // Suppress WebSocketServer crash when HTTP port is already in use
+  wss.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EADDRINUSE") {
+      throw err;
+    }
+  });
+
   app.use(express.json());
 
   // Serve web console
@@ -162,6 +169,16 @@ export function startHttpServer(port: number): void {
     ws.on("error", () => {
       messageQueue.unregisterClient(clientId);
     });
+  });
+
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      process.stderr.write(
+        `[kimi-debug-tunnel] Port ${port} already in use — HTTP server skipped (MCP stdio still available)\n`
+      );
+    } else {
+      throw err;
+    }
   });
 
   httpServer.listen(port, "0.0.0.0", () => {

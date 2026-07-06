@@ -3,6 +3,7 @@
   2026-07-05 | kimi-code (md-update) | 更新项目结构树：新增 routes/ types.ts kimi-api-transport.ts content-processor.ts ws-handler.ts session-store.ts session-log-reader.ts
   2026-07-05 | kimi-code (md-update) | 修正 /api/send 描述：已改为直接调用 WireClient 而非队列
   2026-07-05 | kimi-code (refactor)   | 架构深化：删除 v1 死代码，引入 TunnelServices DI，拆分 WireClient/HTTP/Session 模块
+  2026-07-06 | kimi-code (bugfix) | 修复 EADDRINUSE 多 session 冲突：http-server.ts 添加双重错误处理避免 MCP 崩溃
   2026-07-05 | FirenzeClaw            | 初始版本
 -->
 

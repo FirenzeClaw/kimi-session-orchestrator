@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-06 | kimi-code (bugfix) | 修复 EADDRINUSE 多 session 冲突：为 httpServer 和 WebSocketServer 添加端口占用错误处理
   2026-07-05 | kimi-code (project-init) | 初始生成：项目元信息、目录结构、构建命令、架构约定
 -->
 
