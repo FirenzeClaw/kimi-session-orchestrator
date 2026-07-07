@@ -18,6 +18,9 @@ import { registerExecuteWorkflow } from "./tools/execute-workflow.js";
 import { registerListTemplates } from "./tools/list-workflow-templates.js";
 import { registerContinueWorkflow } from "./tools/continue-workflow.js";
 import { registerWatchSession, registerGetWatchResult, registerContinueWatch, registerSetWatchOutput } from "./tools/session-watch.js";
+import { registerListPolicies } from "./tools/list-policies.js";
+import { registerApproveTool } from "./tools/approve-tool.js";
+import { registerDenyTool } from "./tools/deny-tool.js";
 
 export async function startMcpServer(services: TunnelServices): Promise<void> {
   const server = new McpServer({
@@ -49,6 +52,11 @@ export async function startMcpServer(services: TunnelServices): Promise<void> {
   registerSetWatchOutput(server, services);
 
   registerGetTunnelStatus(server, services);
+
+  // Policy & permission management tools
+  registerListPolicies(server, services);
+  registerApproveTool(server, services);
+  registerDenyTool(server, services);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

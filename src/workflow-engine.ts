@@ -132,10 +132,11 @@ export class WorkflowEngine {
       autoMode: boolean;
       model?: string;
       thinking?: string;
+      policy?: string;
       onProgress?: (progress: WorkflowProgress) => void;
     }
   ): Promise<WorkflowResult> {
-    const { autoMode, onProgress, model, thinking } = options;
+    const { autoMode, onProgress, model, thinking, policy } = options;
     const executionId = randomUUID();
     const startTime = Date.now();
     const originalSessionId = this.wireClient.getSessionId();
@@ -167,6 +168,15 @@ export class WorkflowEngine {
         thinking,
       });
       sessionId = created.sessionId;
+
+      // Bind policy to the newly created task session
+      if (policy) {
+        try {
+          this.wireClient.setSessionPolicy(sessionId, policy, template.projectCwd);
+        } catch (policyErr) {
+          process.stderr.write(`[workflow-engine] Policy binding warning: ${(policyErr as Error).message}\n`);
+        }
+      }
 
       // Push progress: session created
       this.pushProgress(onProgress, {

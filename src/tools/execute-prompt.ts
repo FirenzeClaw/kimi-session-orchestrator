@@ -35,8 +35,18 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
         .describe(
           "已废弃。受 MCP 超时限制，始终即发即返。用 poll_session / list_io_records 轮询进度。"
         ),
+      policy: z
+        .string()
+        .optional()
+        .describe(
+          '任务策略。可选值:\n' +
+          '- "read-only": 只读（禁止写文件/执行命令）\n' +
+          '- "safe-edit": 安全编辑（禁止 shell 命令，可编辑文件）\n' +
+          '- "full-access": 全部允许（默认）\n' +
+          '- 自定义策略文件路径: 如 ".kimi-tunnel/policies/review.yaml"'
+        ),
     },
-    async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait }) => {
+    async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait, policy }) => {
       if (!wireClient.isConnected()) {
         try {
           await wireClient.connect();
@@ -55,6 +65,16 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
 
       try {
         wireClient.setSessionId(session_id);
+
+        // Bind policy if specified (only if session not already bound)
+        if (policy) {
+          try {
+            wireClient.setSessionPolicy(session_id, policy);
+          } catch (policyErr) {
+            // Non-fatal: policy binding failure shouldn't block prompt submission
+            process.stderr.write(`[execute-prompt] Policy binding warning: ${(policyErr as Error).message}\n`);
+          }
+        }
 
         if (!wait) {
           // Fire-and-forget: submit prompt, return immediately with poll command

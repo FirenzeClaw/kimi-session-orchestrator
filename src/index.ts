@@ -2,6 +2,7 @@
 import { WireClient } from "./wire-client.js";
 import { MessageQueue } from "./message-queue.js";
 import { WorkflowEngine } from "./workflow-engine.js";
+import { PolicyEngine } from "./policy-engine.js";
 import type { TunnelServices } from "./types.js";
 import { startMcpServer } from "./mcp-server.js";
 import { startHttpServer } from "./http-server.js";
@@ -15,7 +16,10 @@ async function main(): Promise<void> {
   const wireClient = new WireClient();
   const messageQueue = new MessageQueue();
   const workflowEngine = new WorkflowEngine(wireClient, messageQueue);
-  const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now(), workflowEngine };
+  const policyEngine = new PolicyEngine();
+  wireClient.setPolicyEngine(policyEngine);
+  wireClient.setMessageQueue(messageQueue);
+  const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now(), workflowEngine, policyEngine };
 
   // Start HTTP + WebSocket server for external clients
   startHttpServer(PORT, services);

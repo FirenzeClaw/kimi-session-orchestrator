@@ -1,6 +1,7 @@
 import type { WireClient } from "./wire-client.js";
 import type { MessageQueue } from "./message-queue.js";
 import type { WorkflowResult, BlockageEvent } from "./workflow-template.js";
+import type { IPolicyEngine } from "./policy-engine.js";
 
 export interface WorkflowProgress {
   template: string;
@@ -15,7 +16,7 @@ export interface WorkflowProgress {
 }
 
 export interface IWorkflowEngine {
-  execute(template: unknown, options: { autoMode: boolean; model?: string; thinking?: string; onProgress?: (p: WorkflowProgress) => void }): Promise<WorkflowResult>;
+  execute(template: unknown, options: { autoMode: boolean; model?: string; thinking?: string; policy?: string; onProgress?: (p: WorkflowProgress) => void }): Promise<WorkflowResult>;
   handleBlockage(executionId: string, decision: "retry" | "skip" | "abort" | "manual", options?: { instruction?: string }): Promise<WorkflowResult | null>;
   getExecution(executionId: string): {
     executionId: string; template: string; sessionId: string;
@@ -31,4 +32,5 @@ export interface TunnelServices {
   messageQueue: MessageQueue;
   startTime: number;
   workflowEngine?: IWorkflowEngine;
+  policyEngine?: IPolicyEngine;
 }

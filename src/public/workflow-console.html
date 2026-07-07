@@ -459,6 +459,20 @@
         </div>
       </div>
     </div>
+
+    <div class="panel wide">
+      <div class="panel-header">
+        <span>&#128274; 策略阻断</span>
+        <span class="count" id="blockCount">0 条</span>
+      </div>
+      <div class="panel-body" id="blockList">
+        <div class="empty">
+          <div class="empty-icon">&#128274;</div>
+          <p>暂无阻断事件</p>
+          <p style="font-size:10px;color:var(--text-muted);">当策略阻止 task session 的工具调用时，事件将在此展示</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -468,6 +482,7 @@
       workflows: new Map(),      // executionId → wf data
       alerts: [],                // [{sessionId, type, msg, ts}]
       skillLog: [],              // [{skill, sessionId, reason, ts}]
+      blockEvents: [],           // [{blockId, sessionId, toolName, policyName, ruleName, message, action, timestamp}]
       wsConnected: false,
     };
 
@@ -520,6 +535,15 @@
         // NEW: skill dispatch log
         case 'skill_dispatched':
           handleSkillDispatch(data);
+          break;
+
+        // NEW: policy block events
+        case 'policy.block':
+          handlePolicyBlock(data);
+          break;
+
+        case 'policy.require_approval':
+          handlePolicyBlock(data);
           break;
 
         // System status (from tunnel)
@@ -608,6 +632,48 @@
       });
       if (state.skillLog.length > 100) state.skillLog.pop();
       renderAll();
+    }
+
+    // ── Policy Block ────────────────────────────
+    function handlePolicyBlock(data) {
+      const p = data.payload || data;
+      state.blockEvents.unshift({
+        blockId: p.blockId || '',
+        sessionId: p.sessionId || '',
+        toolName: p.toolName || '',
+        policyName: p.policyName || '',
+        ruleName: p.ruleName || '',
+        message: p.message || '',
+        action: p.action || 'deny',
+        timestamp: p.timestamp || new Date().toISOString(),
+      });
+      if (state.blockEvents.length > 200) state.blockEvents.pop();
+      document.getElementById('blockCount').textContent = state.blockEvents.length + ' 条';
+      renderBlockEvents();
+    }
+
+    function renderBlockEvents() {
+      const el = document.getElementById('blockList');
+      if (state.blockEvents.length === 0) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">&#128274;</div><p>暂无阻断事件</p></div>';
+        return;
+      }
+      el.innerHTML = state.blockEvents.map(b => {
+        const icon = b.action === 'deny' ? '&#10060;' : '&#9888;';
+        const cls = b.action === 'deny' ? 'danger' : 'warn';
+        return `<div class="alert-item ${cls}">
+          <span class="alert-icon">${icon}</span>
+          <div class="alert-body">
+            <div class="alert-title">${b.toolName} — ${b.policyName}/${b.ruleName}</div>
+            <div class="alert-meta">${b.sessionId.slice(0,20)}... &middot; ${new Date(b.timestamp).toLocaleTimeString()}</div>
+            <div class="alert-msg">${b.message || '工具调用被策略阻断'}</div>
+          </div>
+          <div class="alert-actions">
+            <button class="btn-sm" onclick="alert('approve_tool block_id=${b.blockId}')" title="放行一次">&#9989;</button>
+            <button class="btn-sm" onclick="alert('deny_tool block_id=${b.blockId}')" title="拒绝">&#10060;</button>
+          </div>
+        </div>`;
+      }).join('');
     }
 
     // ── Attention Alert ──────────────────────────

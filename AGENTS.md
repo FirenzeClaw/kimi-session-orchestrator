@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-07 | kimi-code (feature) | 实施 specs/003-permission-policy v1.0：三层权限系统——策略引擎（policy-engine）+ 工具级拦截（WireClient approveAll）+ 3内置策略（read-only/safe-edit/full-access）+ 自定义YAML策略 + 3新MCP工具（list_policies/approve_tool/deny_tool）+ 5工具policy参数增强 + PM Dashboard阻断事件面板；工具总数 19→22；selftest通过
   2026-07-07 | kimi-code (spec) | 新增 specs/003-permission-policy：三层权限架构（Session级+任务级策略+工具级拦截）——对标 Codex/AGT
   2026-07-07 | kimi-code (spec) | 新增 specs/002-session-memory-share：三层共享内存（L1项目知识库+L2 Session上下文+L3学习沉淀）——冷启动上下文节省83%+
   2026-07-07 | kimi-code (research) | 竞品分析：kimi-mcp-server/agent-orchestration/agent-pool-mcp；内存共享系统调研；权限管理系统调研
@@ -51,7 +52,7 @@
 src/
 ├── index.ts                 # 入口：创建 TunnelServices，启动 HTTP+MCP 双服务器
 ├── types.ts                 # TunnelServices 接口（wireClient, messageQueue, startTime, workflowEngine）
-├── mcp-server.ts            # MCP stdio 服务器，注册全部 18 个工具
+├── mcp-server.ts            # MCP stdio 服务器，注册全部 22 个工具
 ├── http-server.ts           # Express + WebSocket 装配入口（薄层）
 ├── wire-client.ts           # Kimi Server REST + WS 推送客户端（状态缓存）
 ├── message-queue.ts         # WebSocket 客户端注册 + pub/sub 广播（简化为 67 行）
@@ -60,6 +61,10 @@ src/
 ├── workflow-store.ts        # 模板持久化（CRUD：list/load/save/delete）
 ├── workflow-engine.ts       # 自适应工作流引擎：创建session→逐步驱动→阻塞处理→恢复
 ├── session-watcher.ts        # WS 事件驱动后台监听：每3s检查状态，完成时自动拉取回复
+├── policy-types.ts          # 策略类型定义 + Zod schema + 已知工具清单
+├── policy-builtins.ts       # 3个内置策略（read-only/safe-edit/full-access）
+├── policy-store.ts          # YAML策略文件CRUD（.kimi-tunnel/policies/）+ 校验
+├── policy-engine.ts         # 策略引擎：解析/检查/绑定/阻断消息 + BlockEvent追踪
 ├── tools/
 │   ├── execute-prompt.ts    # 发送 prompt 并等待完整回复
 │   ├── create-session.ts    # 通过 REST API 创建新 session
@@ -76,6 +81,9 @@ src/
 │   ├── list-workflow-templates.ts # 列出可用模板
 │   ├── continue-workflow.ts # 对暂停的工作流执行决策（重试/跳过/终止/覆盖）
 │   ├── session-watch.ts     # watch_session/get_watch_result/continue_watch 后台监听
+│   ├── list-policies.ts     # 列出内置+自定义策略（含验证状态）
+│   ├── approve-tool.ts      # PM 放行被阻断的工具调用
+│   ├── deny-tool.ts         # PM 拒绝被阻断的工具调用
 │   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间
 └── public/
     ├── console.html          # Web 调试控制台
@@ -224,7 +232,7 @@ for m in data.get('items',[]):
 | `docs/coordinator-guide.md` | **统筹 Session 准入规范（PM视角 v2.3）**——角色定位、工作分解、注意力管理、Skill调度、越权控制、红线 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎——已实施 |
 | `specs/002-session-memory-share/` | [WIP] Session 冷启动记忆共享——三层内存架构 |
-| `specs/003-permission-policy/` | [WIP] 权限与策略管理——read-only/safe-edit/full-access |
+| `specs/003-permission-policy/` | [DONE] 权限与策略管理——read-only/safe-edit/full-access + 自定义YAML策略 |
 
 ## Agent Skills
 

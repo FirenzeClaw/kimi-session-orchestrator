@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-07 | kimi-code (v2.4) | 实施 003-permission-policy：三层权限系统——策略引擎 + 工具级拦截 + 3内置策略 + 自定义YAML + 3新MCP工具（list_policies/approve_tool/deny_tool）；工具总数 19→22；selftest通过
   2026-07-07 | kimi-code (v2.3) | PM Dashboard 重写 + 监控页面升级；coordinator-guide v2.3（PM范式/Skill调度/注意力管理/越权控制）；2个新spec（002/003）；竞品分析+系统调研
   2026-07-07 | kimi-code (fix) | sanitizeText 反斜杠预加固 + maxContentLength 参数：防御 hex escape 错误，解决审计报告截断
   2026-07-06 | kimi-code (robustness) | WireClient 新增心跳探测+自动重连：每10s ping /api/v1/meta，连续3次无响应→标记断连→自动重连；解决 Kimi web 静默崩溃后状态假活问题
@@ -110,6 +111,9 @@ Tunnel 启动后自动连接 Kimi Server 并选择最近的 session。
 | `get_watch_result` | 获取后台监听结果（非阻塞） |
 | `continue_watch` | 拿结果+自动发下一步指令+启动新监听，形成自动化循环 |
 | `set_watch_output` | 设置监听输出文件，完成后自动写入结果到本地文件 |
+| `list_policies` | 列出所有可用策略（内置 + 自定义），含验证状态 |
+| `approve_tool` | PM 放行被策略阻断的工具调用（once/session scope） |
+| `deny_tool` | PM 拒绝被策略阻断或待审批的工具调用 |
 
 ## REST API
 
@@ -153,6 +157,10 @@ src/
 ├── workflow-store.ts        # 模板持久化（CRUD）
 ├── workflow-engine.ts       # 自适应工作流引擎
 ├── session-watcher.ts        # WS 后台监听器
+├── policy-types.ts          # 策略类型 + Zod schema + 已知工具清单
+├── policy-builtins.ts       # 3个内置策略
+├── policy-store.ts          # YAML 策略文件 CRUD
+├── policy-engine.ts         # 策略引擎：解析/检查/绑定 + BlockEvent追踪
 ├── tools/
 │   ├── execute-prompt.ts    # 发送 prompt 并等待完整回复
 │   ├── chat-with-session.ts # 全自动多轮编排
@@ -169,6 +177,9 @@ src/
 │   ├── list-workflow-templates.ts # 列出可用模板
 │   ├── continue-workflow.ts # 暂停工作流的决策处理
 │   ├── session-watch.ts     # 后台监听工具 (watch/get/continue/set_watch)
+│   ├── list-policies.ts     # 列出可用策略（内置+自定义，含验证状态）
+│   ├── approve-tool.ts      # PM 放行被阻断的工具调用
+│   ├── deny-tool.ts         # PM 拒绝被阻断的工具调用
 │   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间（含 wsConnected）
 └── public/
     ├── console.html          # Web 调试控制台 (v2.3)
@@ -183,7 +194,7 @@ src/
 | `docs/coordinator-guide.md` | 统筹 Session 准入规范（PM视角 v2.3） |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎 [DONE] |
 | `specs/002-session-memory-share/` | Session 冷启动记忆共享 [WIP] |
-| `specs/003-permission-policy/` | 权限与策略管理 [WIP] |
+| `specs/003-permission-policy/` | 权限与策略管理 [DONE] |
 
 ## License
 

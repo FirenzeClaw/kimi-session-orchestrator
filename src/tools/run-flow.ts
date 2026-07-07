@@ -15,8 +15,9 @@ export function registerRunFlow(server: McpServer, services: TunnelServices): vo
       auto_mode: z.boolean().default(true).describe("自动审批工具调用"),
       model: z.string().optional().describe("模型标识符"),
       thinking: z.enum(["off","low","medium","high","xhigh","max"]).optional().describe("思考级别"),
+      policy: z.string().optional().describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
     },
-    async ({ cwd, steps, auto_mode, model, thinking }) => {
+    async ({ cwd, steps, auto_mode, model, thinking, policy }) => {
       if (!wireClient.isConnected()) {
         try { await wireClient.connect(); } catch {
           return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server" }], isError: true };
@@ -36,7 +37,7 @@ export function registerRunFlow(server: McpServer, services: TunnelServices): vo
 
       // Fire-and-forget via WorkflowEngine (shared wireClient)
       const engine = services.workflowEngine || new WorkflowEngine(wireClient, services.messageQueue);
-      engine.execute(template, { autoMode: auto_mode, model, thinking })
+      engine.execute(template, { autoMode: auto_mode, model, thinking, policy })
         .then(r => process.stderr.write(`[run-flow] ${r.template} ${r.status}\n`))
         .catch(e => process.stderr.write(`[run-flow] error: ${e.message}\n`));
 

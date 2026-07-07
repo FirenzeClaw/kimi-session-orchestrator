@@ -18,8 +18,9 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
       session_id: z.string().describe("目标 session ID"),
       task: z.string().describe("任务需求描述"),
       auto_mode: z.boolean().default(false).describe("自动审批工具调用"),
+      policy: z.string().optional().describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
     },
-    async ({ session_id, task, auto_mode }) => {
+    async ({ session_id, task, auto_mode, policy }) => {
       if (!wireClient.isConnected()) {
         try { await wireClient.connect(); } catch {
           return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open" }], isError: true };
@@ -27,6 +28,11 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
       }
 
       wireClient.setSessionId(session_id);
+
+      // Bind policy if specified
+      if (policy) {
+        try { wireClient.setSessionPolicy(session_id, policy); } catch { /* non-fatal */ }
+      }
 
       try {
         const { promptId } = await wireClient.submitPrompt(task, { autoApprove: auto_mode });

@@ -133,7 +133,7 @@ rules:
 
 - SC-1：使用 `policy="read-only"` 的 session 对文件写入工具的调用 100% 被阻断（零绕过）
 - SC-2：PM 可在 1 分钟内创建一个自定义策略文件并应用到新 session
-- SC-3：工具被阻断时，session 在 2 秒内收到清晰的阻断原因（不超时等待）
+- SC-3：工具被阻断时，tunnel 在检测到违规调用后 2 秒内向 Kimi Server 提交 denial 决策，session 随后收到清晰的阻断原因（tunnel 端到端延迟取决于 Kimi Server 轮询间隔，作为观察指标）
 - SC-4：策略阻断事件在 PM Dashboard 上的展示延迟不超过 3 秒（通过 WS 推送）
 - SC-5：自定义策略的语法错误在加载时被检测并报告，错误位置精确到行号
 
@@ -141,7 +141,7 @@ rules:
 
 ## 假设与约束
 
-- 策略在 session 创建时绑定，session 生命周期内不可更改（避免 session 中途权限变化导致不可预期的行为）
+- 策略在 session 创建时绑定，session 生命周期内不可自动更改。PM 可通过 `approve_tool(scope="session")` 进行有意识的运行时豁免（如临时放行特定工具），豁免记录写入日志供审计。非 PM 发起的策略变更是禁止的
 - 内置策略 `read-only` 和 `safe-edit` 的工具列表是固定的，不可自定义
 - 策略引擎运行在 kimi-debug-tunnel 进程内，不依赖外部服务
 - 工具调用拦截通过 MCP 工具注册层的包装实现，不需要修改 kimi-code 本身

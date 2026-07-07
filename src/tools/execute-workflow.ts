@@ -31,8 +31,12 @@ export function registerExecuteWorkflow(server: McpServer, services: TunnelServi
         .enum(["off", "low", "medium", "high", "xhigh", "max"])
         .optional()
         .describe("思考级别"),
+      policy: z
+        .string()
+        .optional()
+        .describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
     },
-    async ({ template_name, cwd, auto_mode, model, thinking }) => {
+    async ({ template_name, cwd, auto_mode, model, thinking, policy }) => {
       // Load template
       const template = await loadTemplate(template_name);
       if (!template) {
@@ -71,13 +75,16 @@ export function registerExecuteWorkflow(server: McpServer, services: TunnelServi
         }
       }
 
+      // Bind policy if specified — passed through to engine which binds after session creation
+      // (no placeholder binding here; engine.execute() receives policy option)
+
       // Run engine (shared wireClient from services)
       const engine = new WorkflowEngine(wireClient, services.messageQueue);
 
       // Start execution (async, non-blocking for the tool)
       // The engine will push progress via WebSocket
       engine
-        .execute(template, { autoMode: auto_mode, model, thinking })
+        .execute(template, { autoMode: auto_mode, model, thinking, policy })
         .then((result) => {
           process.stderr.write(
             `[workflow-engine] "${template_name}" completed: ${result.status}\n`

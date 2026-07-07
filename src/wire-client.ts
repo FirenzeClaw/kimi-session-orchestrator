@@ -9,10 +9,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { WebSocket } from "ws";
 import { WireTransport } from "./wire-transport.js";
+import type { PolicyEngine } from "./policy-engine.js";
+import type { MessageQueue } from "./message-queue.js";
+import { findSessionPath } from "./session-store.js";
 
 interface KimiContentBlock {
   type: "text" | "thinking" | "tool_use" | "tool_result";
@@ -100,6 +103,12 @@ export class WireClient {
   private healthFailCount = 0;
   private static HEALTH_CHECK_INTERVAL_MS = 10_000;
   private static HEALTH_MAX_FAILS = 3;
+  // Policy engine: checks tool calls against session policies
+  private policyEngine: PolicyEngine | null = null;
+  // Message queue: broadcasts block events to WebSocket clients (PM Dashboard)
+  private messageQueue: MessageQueue | null = null;
+  // Wire log path cache: resolves sessionId → wire.jsonl path for audit logging
+  private wireLogCache = new Map<string, string>();
 
   constructor(sessionId?: string) {
     this.baseUrl =
@@ -128,6 +137,30 @@ export class WireClient {
   setToken(token: string): void {
     this.token = token;
     this.transport.token = token;
+  }
+
+  /** Inject the message queue for broadcasting block events to PM Dashboard. */
+  setMessageQueue(mq: MessageQueue): void {
+    this.messageQueue = mq;
+  }
+
+  /** Inject the policy engine for tool-call interception. */
+  setPolicyEngine(pe: PolicyEngine): void {
+    this.policyEngine = pe;
+  }
+
+  /**
+   * Bind a policy to a session. The policy engine will check all tool calls
+   * against this policy during approval handling.
+   */
+  setSessionPolicy(sessionId: string, policySpec: string, cwd?: string, boundBy?: string): void {
+    if (!this.policyEngine) {
+      process.stderr.write(`[wire-client] WARNING: policyEngine not set, cannot bind policy for ${sessionId}\n`);
+      return;
+    }
+    const policy = this.policyEngine.resolve(policySpec, cwd);
+    this.policyEngine.bind(sessionId, policy, boundBy);
+    process.stderr.write(`[wire-client] Policy "${policy.name}" bound to session ${sessionId}\n`);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -680,17 +713,50 @@ export class WireClient {
   private async approveAll(sessionId: string): Promise<void> {
     try {
       const approvalsResp = await this.transport.apiGet<{
-        items: Array<{ approval_id: string }>;
+        items: Array<{ approval_id: string; tool_name?: string; description?: string }>;
       }>(`/api/v1/sessions/${sessionId}/approvals?status=pending`);
 
       const items = approvalsResp.items || [];
+      const policy = this.policyEngine?.getActivePolicy(sessionId) ?? null;
+
       for (const item of items) {
+        // Extract tool name from approval payload (or fallback to description)
+        const toolName = item.tool_name || extractToolFromDescription(item.description || "");
+
+        if (policy && toolName) {
+          const decision = this.policyEngine!.check(policy, toolName);
+
+          if (decision.action === "deny") {
+            // Policy blocks this tool — deny the approval
+            await this.transport.apiPost(
+              `/api/v1/sessions/${sessionId}/approvals/${item.approval_id}`,
+              { decision: "rejected", reason: decision.message || `Policy "${policy.name}" blocks ${toolName}` }
+            );
+            process.stderr.write(
+              `[wire-client] Policy DENIED: ${toolName} — ${decision.ruleName || "(default)"} (session ${sessionId})\n`
+            );
+            // Broadcast block event to PM Dashboard via WebSocket
+            this.broadcastBlockEvent(sessionId, policy.name, decision.ruleName || "(default)", toolName, decision.message || "", "deny");
+            continue;
+          }
+
+          if (decision.action === "require_approval") {
+            // Requires PM intervention — leave pending, broadcast event
+            process.stderr.write(
+              `[wire-client] Policy REQUIRE_APPROVAL: ${toolName} — ${decision.ruleName} (session ${sessionId})\n`
+            );
+            this.broadcastBlockEvent(sessionId, policy.name, decision.ruleName || "(default)", toolName, decision.message || "", "require_approval");
+            continue;
+          }
+        }
+
+        // Default: approve (policy allows, or no policy bound)
         await this.transport.apiPost(
           `/api/v1/sessions/${sessionId}/approvals/${item.approval_id}`,
           { decision: "approved", scope: "session" }
         );
         process.stderr.write(
-          `[wire-client] Auto-approved ${item.approval_id} (session scope)\n`
+          `[wire-client] Auto-approved ${item.approval_id} (${toolName || "unknown tool"}) — session scope\n`
         );
       }
     } catch {
@@ -770,6 +836,87 @@ export class WireClient {
   // REST helpers (delegated to WireTransport)
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  /**
+   * Broadcast a policy block event to all connected WebSocket clients (PM Dashboard).
+   */
+  private broadcastBlockEvent(
+    sessionId: string,
+    policyName: string,
+    ruleName: string,
+    toolName: string,
+    message: string,
+    action: "deny" | "require_approval"
+  ): void {
+    if (!this.messageQueue) return;
+
+    const blockId = randomUUID().slice(0, 8);
+    const event = {
+      type: "policy.block",
+      payload: {
+        blockId,
+        sessionId,
+        policyName,
+        ruleName,
+        toolName,
+        message,
+        action,
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    this.messageQueue.broadcastJson(event);
+
+    // Also record in policy engine for approve/deny tool tracking
+    if (this.policyEngine) {
+      this.policyEngine.recordBlock({
+        id: blockId,
+        sessionId,
+        toolName,
+        policyName,
+        ruleName,
+        action,
+        message,
+        timestamp: new Date().toISOString(),
+        resolved: false,
+        resolution: null,
+      });
+    }
+
+    // Write block event to wire.jsonl for audit trail
+    const logEntry = JSON.stringify({
+      type: "policy.block",
+      sessionId,
+      toolName,
+      policy: policyName,
+      rule: ruleName,
+      action,
+      timestamp: new Date().toISOString(),
+    });
+    this.appendToWireLog(sessionId, logEntry);
+  }
+
+  private appendToWireLog(sessionId: string, entry: string): void {
+    const cached = this.wireLogCache.get(sessionId);
+    if (cached) {
+      try { appendFileSync(cached, entry + "\n", "utf-8"); return; } catch { /* fall through to stderr */ }
+    }
+
+    findSessionPath(sessionId)
+      .then((sessionDir) => {
+        if (sessionDir) {
+          const wirePath = sessionDir.replace(/[/\\]?$/, "") + "/wire.jsonl";
+          this.wireLogCache.set(sessionId, wirePath);
+          try { appendFileSync(wirePath, entry + "\n", "utf-8"); } catch { /* best-effort */ }
+        }
+      })
+      .catch(() => {});
+
+    process.stderr.write(`[policy-block] ${entry}\n`);
+  }
+
+  // REST helpers (delegated to WireTransport)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   async apiGet<T>(path: string): Promise<T> {
     return this.transport.apiGet<T>(path);
   }
@@ -781,4 +928,24 @@ export class WireClient {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Extract tool name from approval description text (fallback when tool_name field is absent).
+ *  Handles various Kimi Server description formats:
+ *    "Tool: Read" | "工具: Bash" | "Use Write to..." |
+ *    "调用 Edit" | "Bash command" | "Run Bash" */
+function extractToolFromDescription(desc: string): string {
+  // Pattern 1: explicit "Tool:" or "工具:" prefix
+  let match = desc.match(/(?:Tool|工具)[\s:]*(\w[\w-]*)/i);
+  if (match) return match[1];
+
+  // Pattern 2: "using ToolName" or "调用 ToolName"
+  match = desc.match(/(?:using|调用|执行|运行)\s+["']?(\w[\w-]*)["']?/i);
+  if (match) return match[1];
+
+  // Pattern 3: standalone capitalized word matching known tool pattern (Read/Write/Bash/Edit/Grep/Glob)
+  match = desc.match(/\b(Read|Write|Edit|Bash|Grep|Glob|Agent|AgentSwarm|TaskStop|TaskList|TaskOutput|WebSearch|FetchURL)\b/);
+  if (match) return match[1];
+
+  return "";
 }

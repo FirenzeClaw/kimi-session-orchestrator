@@ -21,8 +21,18 @@ export function registerCreateSession(server: McpServer, services: TunnelService
         .enum(["off", "low", "medium", "high", "xhigh", "max"])
         .optional()
         .describe("思考级别，默认 max"),
+      policy: z
+        .string()
+        .optional()
+        .describe(
+          '任务策略。可选值:\n' +
+          '- "read-only": 只读（禁止写文件/执行命令）\n' +
+          '- "safe-edit": 安全编辑（禁止 shell 命令，可编辑文件）\n' +
+          '- "full-access": 全部允许（默认）\n' +
+          '- 自定义策略文件路径: 如 ".kimi-tunnel/policies/review.yaml"'
+        ),
     },
-    async ({ cwd, title, permission_mode, model, thinking }) => {
+    async ({ cwd, title, permission_mode, model, thinking, policy }) => {
       if (!wireClient.isConnected()) {
         try {
           await wireClient.connect();
@@ -50,6 +60,18 @@ export function registerCreateSession(server: McpServer, services: TunnelService
 
         wireClient.setSessionId(result.sessionId);
 
+        // Bind policy if specified
+        if (policy) {
+          try {
+            wireClient.setSessionPolicy(result.sessionId, policy, cwd);
+          } catch (policyErr) {
+            return {
+              content: [{ type: "text", text: `策略绑定失败: ${(policyErr as Error).message}` }],
+              isError: true,
+            };
+          }
+        }
+
         return {
           content: [
             {
@@ -60,6 +82,7 @@ export function registerCreateSession(server: McpServer, services: TunnelService
                   title: result.title,
                   cwd,
                   permission_mode,
+                  policy: policy || "full-access (default)",
                 },
                 null,
                 2
