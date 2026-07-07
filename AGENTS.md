@@ -1,6 +1,6 @@
 <!--
 修改记录:
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 注意力管理融入本机实测数据：360K 上下文拐点、衰减信号增加典型触发点、退役速查表量化阈值、上下文大小估算代理指标、新增"接近360K不启动新任务"红线
+  2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增越权与冲动控制（§1.5.6）：越权/冲动的定义、纠正协议、为什么是注意力漂移的早期信号；衰减信号表新增越权+冲动两行；PM红线扩充至14条
   2026-07-07 | kimi-code (docs) | coordinator-guide.md 升级为项目经理视角：新增 §零 角色定位、工作分解规范、PM决策框架、质量门、PM级别红线；v2.2
   2026-07-07 | kimi-code (docs) | 新增 docs/coordinator-guide.md：统筹 Session 准入规范——工具准入矩阵、运行规范、错误处理、红线、内容安全
   2026-07-07 | kimi-code (fix) | sanitizeText 反斜杠预加固：\\xNN/\\uNNNN 序列双反斜杠硬化 + 负向前瞻幂等保证，防御下游 kimi-code JSON 序列化器漏转义导致的 Provider hex escape parse 错误
