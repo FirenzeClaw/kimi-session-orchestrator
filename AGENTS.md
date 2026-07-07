@@ -1,5 +1,7 @@
 <!--
 修改记录:
+  2026-07-07 | kimi-code (fix) | sanitizeText 反斜杠预加固：\\xNN/\\uNNNN 序列双反斜杠硬化 + 负向前瞻幂等保证，防御下游 kimi-code JSON 序列化器漏转义导致的 Provider hex escape parse 错误
+  2026-07-07 | kimi-code (fix) | session-log-reader 防御性增强：新增 sanitizeText() 清洗 lone surrogates + 控制字符；listIORecords/readSessionLog 增加 maxContentLength 参数（默认 2000/500）；list_io_records/read_session_log 工具暴露 max_content_length 参数；移除工具层二次截断
   2026-07-06 | kimi-code (robustness) | WireClient 新增心跳探测+自动重连：每10s ping /api/v1/meta，连续3次失败→connected=false→auto connect()；解决 kimi web 静默崩溃后 connected 标志永久过期问题
   2026-07-06 | kimi-code (arch) | 确定后台监听最佳方案：Bash REST 轮询（OS进程信号驱动，零开销），set_watch_output 降为备选；修复 WS 直接帧处理、ESM require 兼容
   2026-07-06 | kimi-code (feature) | 新增 watch_session/get_watch_result/continue_watch/set_watch_output 4工具：WS 后台监听 + 自动化循环 + 文件输出
