@@ -1,6 +1,6 @@
 <!--
 修改记录:
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 退役流程增加 learn 步骤 + PM 自身技能表补充 learn；核心原则框第三条：可复用方案=组织资产；PM红线扩充至15条
+  2026-07-07 | kimi-code (docs) | coordinator-guide.md 退役交接：步骤⑤⑥升级为7区块上下文交接模板（含强制基线阅读+等待确认协议）；PM红线+反模式表追加上下文交接条目
   2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增越权与冲动控制（§1.5.6）——注意力漂移早期信号；衰减信号表+2行；PM红线14条
   2026-07-07 | kimi-code (docs) | coordinator-guide.md 注意力管理融入本机实测：360K上下文拐点、衰减信号典型触发点、退役速查量化阈值、上下文估算代理指标
   2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增 §1.5 上下文效率与注意力管理：Token经济编排、审查-修复分离、衰减检测、退役流程、规范偏离纠正
