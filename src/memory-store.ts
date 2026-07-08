@@ -87,8 +87,12 @@ export class MemoryStore implements IMemoryStore {
 
   private requireDb(): DatabaseSync {
     if (!this.db) {
+      const tunnelPath = this.projectRoot ? join(this.projectRoot, ".kimi-tunnel") : null;
+      const hasTunnelDir = tunnelPath ? existsSync(tunnelPath) : false;
       throw new Error(
-        "知识库未初始化。在项目根目录创建 .kimi-tunnel/ 目录以启用共享内存功能。"
+        hasTunnelDir
+          ? "知识库 DB 未打开。请重启 Tunnel 以触发启动初始化。"
+          : "知识库未初始化。在项目根目录创建 .kimi-tunnel/ 目录以启用共享内存功能。"
       );
     }
     return this.db;

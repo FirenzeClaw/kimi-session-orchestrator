@@ -21,6 +21,18 @@ async function main(): Promise<void> {
   const memoryStore = new MemoryStore();
   wireClient.setPolicyEngine(policyEngine);
   wireClient.setMessageQueue(messageQueue);
+
+  // Initialize memory DB eagerly so all 6 memory_* MCP tools are usable
+  // without requiring a session tool (create_session/execute_prompt) call first.
+  // Fixes: docs/issues/memory-init-timing.md
+  const projectRoot = memoryStore.resolveProjectRoot(process.cwd());
+  if (projectRoot) {
+    memoryStore.ensureDb(projectRoot);
+    process.stderr.write(`[kimi-debug-tunnel] Memory DB: ${projectRoot}/.kimi-tunnel/memory.db\n`);
+  } else {
+    process.stderr.write("[kimi-debug-tunnel] Memory DB: .kimi-tunnel/ not found under CWD, deferred\n");
+  }
+
   const services: TunnelServices = { wireClient, messageQueue, startTime: Date.now(), workflowEngine, policyEngine, memoryStore };
 
   // Start HTTP + WebSocket server for external clients
