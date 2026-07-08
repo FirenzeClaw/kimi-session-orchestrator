@@ -1,5 +1,7 @@
 <!--
 修改记录:
+  2026-07-08 | kimi-code (feature) | 实施 specs/004-memory-lazy-inject：buildInjection() 从全量预载改为索引+按需自读（minimal/standard/full 三级格式）；注入文本 ~600B→~200B（标准级）；角色锚定"你是任务 session"；>20条自动折叠；selftest通过（109B/194B/332B/68B/390B）
+  2026-07-08 | kimi-code (fix) | 记忆系统 2 个缺陷修复：① 启动时主动 ensureDb() 解决管理工具未初始化问题；② TunnelServices +tunnelProjectRoot 解决跨项目注入静默失效——注入不再依赖 session cwd，始终使用 tunnel 自身 memory.db；selftest + 极限测试通过（2字prompt纯记忆应答、空目录零文件对照）
   2026-07-08 | kimi-code (feature) | 实施 specs/002-session-memory-share v1.0：三层共享内存系统——MemoryStore（node:sqlite）+ 6个MCP工具（memory_set/get/list/delete/status/archive）+ 自动注入（create_session/execute_prompt）；冷启动token节省83%+；工具总数 22→28；selftest通过
   2026-07-07 | kimi-code (feature) | 实施 specs/003-permission-policy v1.0：三层权限系统——策略引擎（policy-engine）+ 工具级拦截（WireClient approveAll）+ 3内置策略（read-only/safe-edit/full-access）+ 自定义YAML策略 + 3新MCP工具（list_policies/approve_tool/deny_tool）+ 5工具policy参数增强 + PM Dashboard阻断事件面板；工具总数 19→22；selftest通过
   2026-07-07 | kimi-code (spec) | 新增 specs/003-permission-policy：三层权限架构（Session级+任务级策略+工具级拦截）——对标 Codex/AGT
@@ -240,8 +242,11 @@ for m in data.get('items',[]):
 | `API.md` | Kimi Server REST API 完整参考（51 端点） |
 | `docs/coordinator-guide.md` | **统筹 Session 准入规范（PM视角 v2.3）**——角色定位、工作分解、注意力管理、Skill调度、越权控制、红线 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎——已实施 |
-| `specs/002-session-memory-share/` | [WIP] Session 冷启动记忆共享——三层内存架构 |
+| `specs/002-session-memory-share/` | [DONE] Session 冷启动记忆共享——三层内存架构（MemoryStore + 6 MCP 工具 + 自动注入） |
 | `specs/003-permission-policy/` | [DONE] 权限与策略管理——read-only/safe-edit/full-access + 自定义YAML策略 |
+| `docs/issues/memory-init-timing.md` | [FIXED] MemoryStore 启动时 ensureDb 缺失导致管理工具无法独立使用 |
+| `docs/issues/memory-cross-project-injection.md` | [FIXED] 跨项目 resolveProjectRoot 静默跳过 → 注入失效 |
+| `specs/004-memory-lazy-inject/` | [DONE] 记忆注入策略升级——全量预载 → 索引+按需自读（minimal/standard/full 三级格式） |
 
 ## Agent Skills
 

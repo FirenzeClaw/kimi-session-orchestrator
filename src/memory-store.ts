@@ -320,71 +320,101 @@ export class MemoryStore implements IMemoryStore {
     };
 
     const namespaces = levelMap[profile.level] || levelMap.standard;
-    const blocks: { title: string; text: string }[] = [];
-    const blockTitles: Record<string, string> = {
+    const suggestionMap: Record<string, string> = {
+      "project/meta": "必读",
+      "project/decisions": "必读",
+      "project/risks": "按需",
+      "project/learnings": "按需",
+    };
+    const nsLabelMap: Record<string, string> = {
       "project/meta": "项目背景",
       "project/decisions": "相关决策",
       "project/risks": "已知风险",
       "project/learnings": "经验沉淀",
     };
 
-    let totalBytes = 0;
+    // Collect entries per namespace (non-expired, ordered by updated_at DESC)
+    const nsEntries: Record<string, string[]> = {};
+    let totalEntries = 0;
     const maxBytes = profile.maxBytes || 8192;
 
     for (const ns of namespaces) {
-      const entries = this.get(ns);
-      if (entries.length === 0) continue;
-
-      let blockText = entries
-        .map((e) => `- **${e.key}**: ${e.value}`)
-        .join("\n");
-
-      const title = blockTitles[ns] || ns;
-
-      // Check expired entries in this namespace
-      const hasExpired = entries.some((e) => e.expired);
-      const warning = hasExpired ? "⚠️ 以下条目可能已过期\n\n" : "";
-
-      const fullBlock = `## ${title}\n\n${warning}${blockText}\n`;
-      const blockBytes = Buffer.byteLength(fullBlock, "utf-8");
-
-      if (totalBytes + blockBytes > maxBytes) {
-        // Truncate: include a shortened version
-        const remaining = maxBytes - totalBytes - 200; // reserve for truncation note
-        if (remaining <= 0) break;
-        const truncated = blockText.slice(0, remaining);
-        blocks.push({
-          title,
-          text: `${warning}${truncated}\n\n…(truncated, use memory_get for details)`,
-        });
-        break;
-      }
-
-      blocks.push({ title, text: `${warning}${blockText}` });
-      totalBytes += blockBytes;
+      const rows = db.prepare(
+        `SELECT key FROM entries WHERE project_id = ? AND namespace = ? AND expired = 0 ORDER BY updated_at DESC`
+      ).all(this.projectId(), ns) as Array<{ key: string }>;
+      const keys = rows.map((r) => r.key);
+      nsEntries[ns] = keys;
+      totalEntries += keys.length;
     }
 
-    // Add handoff from fromSession
+    // --- Empty guard ---
+    if (totalEntries === 0) {
+      return "[系统注入] 你是任务 session。当前无共享记忆条目。";
+    }
+
+    // --- Build output per level ---
+    let output = "";
+
+    const rolePrefix = "[系统注入] 你是任务 session。";
+
+    if (profile.level === "minimal") {
+      // FR-1 minimal: single instruction
+      output = `${rolePrefix} 使用 memory_get("project/meta") 读取项目背景后开始工作。`;
+    } else if (profile.level === "standard") {
+      // FR-1 standard: bullet list
+      const lines: string[] = [
+        `${rolePrefix} 使用 memory_get 按需读取：`,
+        "",
+      ];
+      for (const ns of namespaces) {
+        if (nsEntries[ns].length === 0) continue;
+        lines.push(`- memory_get("${ns}") — ${nsLabelMap[ns] || ns}（${suggestionMap[ns] || "按需"}）`);
+      }
+      output = lines.join("\n");
+    } else {
+      // full: index table
+      const collapse = totalEntries > 20;
+      const lines: string[] = [
+        `${rolePrefix} 以下记忆条目可用，请用 memory_get 按需读取：`,
+        "",
+        "| 命名空间 | 条目 | 建议 |",
+        "|---------|------|------|",
+      ];
+
+      for (const ns of namespaces) {
+        const keys = nsEntries[ns];
+        if (keys.length === 0) continue;
+        const entryCell = collapse
+          ? `(${keys.length} 条)`
+          : keys.join(", ");
+        lines.push(`| ${ns} | ${entryCell} | ${suggestionMap[ns] || "按需"} |`);
+      }
+
+      if (collapse) {
+        lines.push("");
+        lines.push(`总计 ${totalEntries} 条，已折叠。使用 memory_get(ns) 读取具体内容。`);
+      }
+
+      output = lines.join("\n");
+    }
+
+    // --- Handoff from fromSession (keep existing logic) ---
     if (profile.fromSession) {
       const handoffEntries = this.get(`session/${profile.fromSession}/handoff`);
       if (handoffEntries.length > 0) {
-        let handoffText = handoffEntries
+        const handoffText = handoffEntries
           .map((e) => `- **${e.key}**: ${e.value}`)
           .join("\n");
-        const fullBlock = `## 前置结论\n\n${handoffText}\n`;
-        const blockBytes = Buffer.byteLength(fullBlock, "utf-8");
-        if (totalBytes + blockBytes <= maxBytes) {
-          blocks.push({ title: "前置结论", text: handoffText });
+        const handoffBlock = `\n\n## 前置结论\n\n${handoffText}`;
+        const outputBytes = Buffer.byteLength(output, "utf-8");
+        const handoffBytes = Buffer.byteLength(handoffBlock, "utf-8");
+        if (outputBytes + handoffBytes <= maxBytes) {
+          output += handoffBlock;
         }
       }
     }
 
-    if (blocks.length === 0) return "";
-
-    // Build final injection
-    const prefix = "> [系统注入] 以下为项目共享知识，由 PM 预先录入。请基于此上下文工作。\n\n";
-    const body = blocks.map((b) => `## ${b.title}\n\n${b.text}`).join("\n\n");
-    return prefix + body;
+    return output;
   }
 
   close(): void {
