@@ -17,6 +17,11 @@
 
 # Kimi Session Orchestrator
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-v2.6-brightgreen)]()
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
+[![MCP Tools](https://img.shields.io/badge/MCP%20tools-28-orange)]()
+
 Kimi Code CLI 的 PM 视角多 session 编排系统——28 个 MCP 工具，支持自适应工作流引擎 + 三层共享内存 + 权限策略管理。
 
 ## 架构
