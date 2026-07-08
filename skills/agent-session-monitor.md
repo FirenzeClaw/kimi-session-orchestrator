@@ -111,7 +111,7 @@ while (true) {
 
 ## 实现参考
 
-完整实现参考 [`kimi-debug-tunnel`](https://github.com/FirenzeClaw/kimi-debug-tunnel)：
+完整实现参考 [`kimi-session-orchestrator`](https://github.com/FirenzeClaw/kimi-session-orchestrator)：
 
 | 组件 | 文件 | 职责 |
 |------|------|------|

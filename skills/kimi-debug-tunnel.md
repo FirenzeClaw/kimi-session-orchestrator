@@ -1,13 +1,13 @@
 ---
 name: kimi-debug-tunnel
-description: 当需要操作 kimi-debug-tunnel MCP 工具时使用——创建任务 session、向 Kimi Code CLI session 发送 prompt、执行多步工作流、监听 session 完成状态、轮询 session 状态。也适用于当前 session 中存在 execute_prompt / chat_with_session / run_flow / watch_session / create_session / poll_session / list_sessions 等 MCP 工具时。
+description: 当需要操作 kimi-session-orchestrator MCP 工具时使用——创建任务 session、向 Kimi Code CLI session 发送 prompt、执行多步工作流、监听 session 完成状态、轮询 session 状态。也适用于当前 session 中存在 execute_prompt / chat_with_session / run_flow / watch_session / create_session / poll_session / list_sessions 等 MCP 工具时。
 ---
 
-# Kimi Debug Tunnel — MCP 使用规范
+# Kimi Session Orchestrator — MCP 使用规范
 
 ## 概述
 
-kimi-debug-tunnel 是一个 MCP 服务器，通过 REST + WebSocket 协议代理 Kimi Code CLI 的 session 操作。所有工具**即发即返**，绝不在当前 turn 内阻塞等待任务 session 回复。
+kimi-session-orchestrator 是一个 MCP 服务器，通过 REST + WebSocket 协议代理 Kimi Code CLI 的 session 操作。所有工具**即发即返**，绝不在当前 turn 内阻塞等待任务 session 回复。
 
 > **📋 项目经理视角**：工具操作规范见本文。统筹决策规范（如何拆解工作、编排并行、合成结果）见 `docs/coordinator-guide.md`。本文告诉你 **怎么用**，coordinator-guide 告诉你 **怎么想**。
 

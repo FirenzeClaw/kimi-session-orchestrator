@@ -92,7 +92,7 @@ interface PollResult {
 
 ## 实现参考
 
-完整实现参考 [`kimi-debug-tunnel`](https://github.com/FirenzeClaw/kimi-debug-tunnel)：
+完整实现参考 [`kimi-session-orchestrator`](https://github.com/FirenzeClaw/kimi-session-orchestrator)：
 
 | 组件 | 文件 | 模式 |
 |------|------|------|
@@ -101,7 +101,7 @@ interface PollResult {
 | 工具层 | `tools/execute-prompt.ts` | `wait=false` 即发即返 + 返回 `poll_command` |
 | 轮询工具 | `tools/poll-session.ts` | 结构化状态（WS 缓存优先） |
 | 后台轮询 | `poll-command.ts` → `generatePollCommand()` | 生成跨平台 bash 轮询脚本 |
-| 使用规范 | skill: `kimi-debug-tunnel` | 完整 MCP 工具使用规则 |
+| 使用规范 | skill: `kimi-session-orchestrator` | 完整 MCP 工具使用规则 |
 
 ## 常见错误
 
