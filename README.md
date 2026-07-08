@@ -25,7 +25,7 @@ Kimi Code CLI 的 PM 视角多 session 编排系统——28 个 MCP 工具，支
 外部用户 (浏览器 / curl)
     ↕ HTTP + WebSocket (端口 3456)
 ┌──────────────────────────────┐
-│   kimi-debug-tunnel MCP 服务器 │
+│   kimi-session-orchestrator MCP 服务器 │
 │   ├─ Express HTTP Server      │
 │   ├─ WebSocket Server         │
 │   ├─ WireClient (REST + WS推送 + 心跳重连) │
@@ -317,7 +317,7 @@ cat > ~/.kimi-code/mcp.json << 'EOF'
   "mcpServers": {
     "kimi-session-orchestrator": {
       "command": "node",
-      "args": ["/home/user/kimi-debug-tunnel/dist/index.js"],
+      "args": ["/home/user/kimi-session-orchestrator/dist/index.js"],
       "env": {
         "KIMI_SERVER_TOKEN": "<token>"
       }
