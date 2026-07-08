@@ -45,8 +45,12 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
           '- "full-access": 全部允许（默认）\n' +
           '- 自定义策略文件路径: 如 ".kimi-tunnel/policies/review.yaml"'
         ),
+      skip_memory: z
+        .boolean()
+        .default(false)
+        .describe("跳过共享内存上下文注入（SPEC 002）。默认 false。"),
     },
-    async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait, policy }) => {
+    async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait, policy, skip_memory }) => {
       if (!wireClient.isConnected()) {
         try {
           await wireClient.connect();
@@ -76,9 +80,38 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
           }
         }
 
+        // Bind memory injection context if profile exists (SPEC 002)
+        let effectivePrompt = prompt;
+        if (!skip_memory && services.memoryStore) {
+          const profile = wireClient.getMemoryProfile(session_id);
+          if (profile && profile.level !== "off") {
+            try {
+              const projectRoot = services.memoryStore.resolveProjectRoot(profile.cwd);
+              if (projectRoot) {
+                services.memoryStore.ensureDb(projectRoot);
+                const injection = services.memoryStore.buildInjection({
+                  level: profile.level as "off" | "minimal" | "standard" | "full",
+                  maxBytes: 8192,
+                  fromSession: profile.fromSession,
+                  cwd: profile.cwd,
+                  hasExpiredEntries: profile.hasExpiredEntries,
+                });
+                if (injection) {
+                  const warning = profile.hasExpiredEntries
+                    ? "⚠️ 警告: 以下注入的部分条目已被 PM 标记为过期，内容可能不是最新。\n\n"
+                    : "";
+                  effectivePrompt = `${warning}${injection}\n\n---\n\n${prompt}`;
+                }
+              }
+            } catch {
+              // Non-fatal: memory injection failure shouldn't block prompt submission
+            }
+          }
+        }
+
         if (!wait) {
           // Fire-and-forget: submit prompt, return immediately with poll command
-          const { promptId } = await wireClient.submitPrompt(prompt, { autoApprove: auto_mode });
+          const { promptId } = await wireClient.submitPrompt(effectivePrompt, { autoApprove: auto_mode });
           return {
             content: [
               {
@@ -99,7 +132,7 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
           };
         }
 
-        const response = await wireClient.sendPrompt(prompt, {
+        const response = await wireClient.sendPrompt(effectivePrompt, {
           timeoutMs: timeout_ms,
           includeThinking: include_thinking,
           autoApprove: auto_mode,

@@ -31,8 +31,19 @@ export function registerCreateSession(server: McpServer, services: TunnelService
           '- "full-access": 全部允许（默认）\n' +
           '- 自定义策略文件路径: 如 ".kimi-tunnel/policies/review.yaml"'
         ),
+      memory_level: z
+        .enum(["off", "minimal", "standard", "full"])
+        .default("standard")
+        .describe(
+          "冷启动内存注入级别。off=不注入, minimal=仅项目元信息, " +
+          "standard=meta+decisions（默认）, full=meta+decisions+risks+learnings"
+        ),
+      from_session: z
+        .string()
+        .optional()
+        .describe("接续的前置 session ID，自动拉取其 handoff 交接信息注入到首条 prompt。"),
     },
-    async ({ cwd, title, permission_mode, model, thinking, policy }) => {
+    async ({ cwd, title, permission_mode, model, thinking, policy, memory_level, from_session }) => {
       if (!wireClient.isConnected()) {
         try {
           await wireClient.connect();
@@ -69,6 +80,35 @@ export function registerCreateSession(server: McpServer, services: TunnelService
               content: [{ type: "text", text: `策略绑定失败: ${(policyErr as Error).message}` }],
               isError: true,
             };
+          }
+        }
+
+        // Bind memory profile if level != "off" (SPEC 002)
+        if (memory_level !== "off" && services.memoryStore) {
+          try {
+            const projectRoot = services.memoryStore.resolveProjectRoot(cwd);
+            if (projectRoot) {
+              services.memoryStore.ensureDb(projectRoot);
+              // Check for expired entries in relevant namespaces
+              const nsToCheck = memory_level === "minimal"
+                ? ["project/meta"]
+                : memory_level === "standard"
+                ? ["project/meta", "project/decisions"]
+                : ["project/meta", "project/decisions", "project/risks", "project/learnings"];
+              let hasExpired = false;
+              for (const ns of nsToCheck) {
+                const entries = services.memoryStore.get(ns);
+                if (entries.some((e) => e.expired)) { hasExpired = true; break; }
+              }
+              wireClient.setMemoryProfile(result.sessionId, {
+                level: memory_level,
+                cwd,
+                fromSession: from_session,
+                hasExpiredEntries: hasExpired,
+              });
+            }
+          } catch {
+            // Memory store setup failure is non-fatal; session creation succeeds anyway
           }
         }
 

@@ -19,8 +19,9 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
       task: z.string().describe("任务需求描述"),
       auto_mode: z.boolean().default(false).describe("自动审批工具调用"),
       policy: z.string().optional().describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
+      skip_memory: z.boolean().default(false).describe("跳过共享内存上下文注入（SPEC 002）。"),
     },
-    async ({ session_id, task, auto_mode, policy }) => {
+    async ({ session_id, task, auto_mode, policy, skip_memory }) => {
       if (!wireClient.isConnected()) {
         try { await wireClient.connect(); } catch {
           return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open" }], isError: true };
@@ -34,8 +35,35 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
         try { wireClient.setSessionPolicy(session_id, policy); } catch { /* non-fatal */ }
       }
 
+      // Bind memory injection context (SPEC 002)
+      let effectiveTask = task;
+      if (!skip_memory && services.memoryStore) {
+        const profile = wireClient.getMemoryProfile(session_id);
+        if (profile && profile.level !== "off") {
+          try {
+            const projectRoot = services.memoryStore.resolveProjectRoot(profile.cwd);
+            if (projectRoot) {
+              services.memoryStore.ensureDb(projectRoot);
+              const injection = services.memoryStore.buildInjection({
+                level: profile.level as "off" | "minimal" | "standard" | "full",
+                maxBytes: 8192,
+                fromSession: profile.fromSession,
+                cwd: profile.cwd,
+                hasExpiredEntries: profile.hasExpiredEntries,
+              });
+              if (injection) {
+                const warning = profile.hasExpiredEntries
+                  ? "⚠️ 警告: 以下注入的部分条目已被 PM 标记为过期，内容可能不是最新。\n\n"
+                  : "";
+                effectiveTask = `${warning}${injection}\n\n---\n\n${task}`;
+              }
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
       try {
-        const { promptId } = await wireClient.submitPrompt(task, { autoApprove: auto_mode });
+        const { promptId } = await wireClient.submitPrompt(effectiveTask, { autoApprove: auto_mode });
         return {
           content: [{ type: "text", text: JSON.stringify({
             submitted: true, session_id, prompt_id: promptId,

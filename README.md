@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-08 | kimi-code (v2.5) | 实施 002-session-memory-share：三层共享内存系统——MemoryStore（node:sqlite 零依赖）+ 6个MCP工具（memory_set/get/list/delete/status/archive）+ 自动注入（create_session/execute_prompt）；冷启动token节省83%+；工具总数 22→28；selftest通过
   2026-07-07 | kimi-code (v2.4) | 实施 003-permission-policy：三层权限系统——策略引擎 + 工具级拦截 + 3内置策略 + 自定义YAML + 3新MCP工具（list_policies/approve_tool/deny_tool）；工具总数 19→22；selftest通过
   2026-07-07 | kimi-code (v2.3) | PM Dashboard 重写 + 监控页面升级；coordinator-guide v2.3（PM范式/Skill调度/注意力管理/越权控制）；2个新spec（002/003）；竞品分析+系统调研
   2026-07-07 | kimi-code (fix) | sanitizeText 反斜杠预加固 + maxContentLength 参数：防御 hex escape 错误，解决审计报告截断
@@ -111,6 +112,12 @@ Tunnel 启动后自动连接 Kimi Server 并选择最近的 session。
 | `get_watch_result` | 获取后台监听结果（非阻塞） |
 | `continue_watch` | 拿结果+自动发下一步指令+启动新监听，形成自动化循环 |
 | `set_watch_output` | 设置监听输出文件，完成后自动写入结果到本地文件 |
+| `memory_set` | 写入键值对到共享内存命名空间，自动记录来源和版本 |
+| `memory_get` | 读取共享内存条目，支持按 key/namespace 过滤 |
+| `memory_list` | 列出命名空间下所有键名，支持前缀匹配 |
+| `memory_delete` | 删除共享内存条目，仅创建者可删除 |
+| `memory_status` | 查看知识库整体状态——条目数、过期数、命名空间分布 |
+| `memory_archive` | 将 session 的 L2 findings 归档为 L1 learnings |
 | `list_policies` | 列出所有可用策略（内置 + 自定义），含验证状态 |
 | `approve_tool` | PM 放行被策略阻断的工具调用（once/session scope） |
 | `deny_tool` | PM 拒绝被策略阻断或待审批的工具调用 |

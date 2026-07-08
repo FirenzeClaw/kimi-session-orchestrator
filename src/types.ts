@@ -27,10 +27,53 @@ export interface IWorkflowEngine {
   } | null;
 }
 
+// === Memory Store Types (SPEC 002) ===
+
+export interface MemoryEntry {
+  id: number;
+  namespace: string;
+  key: string;
+  value: string;
+  sourceSessionId: string | null;
+  version: number;
+  expired: boolean;
+  createdAt: string;
+  updatedAt: string;
+  projectId: string;
+}
+
+export interface InjectionProfile {
+  level: "off" | "minimal" | "standard" | "full";
+  maxBytes: number;
+  fromSession?: string;
+  cwd?: string;
+  hasExpiredEntries?: boolean;
+}
+
+export interface IMemoryStore {
+  resolveProjectRoot(cwd: string): string | null;
+  ensureDb(projectRoot: string): void;
+  set(namespace: string, key: string, value: string, sessionId?: string, expire?: boolean): MemoryEntry;
+  get(namespace: string, key?: string, includeExpired?: boolean): MemoryEntry[];
+  list(namespace?: string): Array<{ path: string; keys: string[]; count: number }>;
+  delete(namespace: string, key: string): void;
+  status(): {
+    projectRoot: string; dbPath: string; totalEntries: number;
+    activeEntries: number; expiredEntries: number;
+    namespaces: Record<string, number>; lastUpdated: string | null;
+  };
+  archive(sessionId: string, targetNs?: string, keys?: string[]): { archived: number; source: string; target: string };
+  buildInjection(profile: InjectionProfile): string;
+  close(): void;
+}
+
+// === Tunnel Services ===
+
 export interface TunnelServices {
   wireClient: WireClient;
   messageQueue: MessageQueue;
   startTime: number;
   workflowEngine?: IWorkflowEngine;
   policyEngine?: IPolicyEngine;
+  memoryStore?: IMemoryStore;
 }

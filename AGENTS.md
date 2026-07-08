@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-08 | kimi-code (feature) | 实施 specs/002-session-memory-share v1.0：三层共享内存系统——MemoryStore（node:sqlite）+ 6个MCP工具（memory_set/get/list/delete/status/archive）+ 自动注入（create_session/execute_prompt）；冷启动token节省83%+；工具总数 22→28；selftest通过
   2026-07-07 | kimi-code (feature) | 实施 specs/003-permission-policy v1.0：三层权限系统——策略引擎（policy-engine）+ 工具级拦截（WireClient approveAll）+ 3内置策略（read-only/safe-edit/full-access）+ 自定义YAML策略 + 3新MCP工具（list_policies/approve_tool/deny_tool）+ 5工具policy参数增强 + PM Dashboard阻断事件面板；工具总数 19→22；selftest通过
   2026-07-07 | kimi-code (spec) | 新增 specs/003-permission-policy：三层权限架构（Session级+任务级策略+工具级拦截）——对标 Codex/AGT
   2026-07-07 | kimi-code (spec) | 新增 specs/002-session-memory-share：三层共享内存（L1项目知识库+L2 Session上下文+L3学习沉淀）——冷启动上下文节省83%+
@@ -52,7 +53,7 @@
 src/
 ├── index.ts                 # 入口：创建 TunnelServices，启动 HTTP+MCP 双服务器
 ├── types.ts                 # TunnelServices 接口（wireClient, messageQueue, startTime, workflowEngine）
-├── mcp-server.ts            # MCP stdio 服务器，注册全部 22 个工具
+├── mcp-server.ts            # MCP stdio 服务器，注册全部 28 个工具
 ├── http-server.ts           # Express + WebSocket 装配入口（薄层）
 ├── wire-client.ts           # Kimi Server REST + WS 推送客户端（状态缓存）
 ├── message-queue.ts         # WebSocket 客户端注册 + pub/sub 广播（简化为 67 行）
@@ -65,6 +66,8 @@ src/
 ├── policy-builtins.ts       # 3个内置策略（read-only/safe-edit/full-access）
 ├── policy-store.ts          # YAML策略文件CRUD（.kimi-tunnel/policies/）+ 校验
 ├── policy-engine.ts         # 策略引擎：解析/检查/绑定/阻断消息 + BlockEvent追踪
+├── memory-store.ts          # SQLite 共享内存 CRUD — set/get/list/delete/status/archive（SPEC 002）
+├── memory-injector.ts       # 内存注入文本拼接：根据 profile 构建 Markdown 前缀（SPEC 002）
 ├── tools/
 │   ├── execute-prompt.ts    # 发送 prompt 并等待完整回复
 │   ├── create-session.ts    # 通过 REST API 创建新 session
@@ -84,6 +87,12 @@ src/
 │   ├── list-policies.ts     # 列出内置+自定义策略（含验证状态）
 │   ├── approve-tool.ts      # PM 放行被阻断的工具调用
 │   ├── deny-tool.ts         # PM 拒绝被阻断的工具调用
+│   ├── memory-set.ts        # 写入共享内存条目（SPEC 002）
+│   ├── memory-get.ts        # 读取共享内存条目
+│   ├── memory-list.ts       # 列出命名空间及键名
+│   ├── memory-delete.ts     # 删除共享内存条目
+│   ├── memory-status.ts     # 查看知识库整体状态
+│   ├── memory-archive.ts    # 归档 session findings 为 learnings
 │   └── get-tunnel-status.ts # Wire 连接状态、客户端数、运行时间
 └── public/
     ├── console.html          # Web 调试控制台

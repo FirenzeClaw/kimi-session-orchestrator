@@ -16,8 +16,10 @@ export function registerRunFlow(server: McpServer, services: TunnelServices): vo
       model: z.string().optional().describe("模型标识符"),
       thinking: z.enum(["off","low","medium","high","xhigh","max"]).optional().describe("思考级别"),
       policy: z.string().optional().describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
+      memory_level: z.enum(["off", "minimal", "standard", "full"]).default("standard").describe("冷启动内存注入级别。"),
+      from_session: z.string().optional().describe("接续的前置 session ID。"),
     },
-    async ({ cwd, steps, auto_mode, model, thinking, policy }) => {
+    async ({ cwd, steps, auto_mode, model, thinking, policy, memory_level, from_session }) => {
       if (!wireClient.isConnected()) {
         try { await wireClient.connect(); } catch {
           return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server" }], isError: true };
@@ -38,6 +40,7 @@ export function registerRunFlow(server: McpServer, services: TunnelServices): vo
       // Fire-and-forget via WorkflowEngine (shared wireClient)
       const engine = services.workflowEngine || new WorkflowEngine(wireClient, services.messageQueue);
       engine.execute(template, { autoMode: auto_mode, model, thinking, policy })
+      // TODO(SPEC-002): pass memoryLevel/fromSession to engine when WorkflowEngine supports them
         .then(r => process.stderr.write(`[run-flow] ${r.template} ${r.status}\n`))
         .catch(e => process.stderr.write(`[run-flow] error: ${e.message}\n`));
 

@@ -35,8 +35,16 @@ export function registerExecuteWorkflow(server: McpServer, services: TunnelServi
         .string()
         .optional()
         .describe('任务策略: "read-only" / "safe-edit" / "full-access" / .yaml路径'),
+      memory_level: z
+        .enum(["off", "minimal", "standard", "full"])
+        .default("standard")
+        .describe("冷启动内存注入级别。"),
+      from_session: z
+        .string()
+        .optional()
+        .describe("接续的前置 session ID。"),
     },
-    async ({ template_name, cwd, auto_mode, model, thinking, policy }) => {
+    async ({ template_name, cwd, auto_mode, model, thinking, policy, memory_level, from_session }) => {
       // Load template
       const template = await loadTemplate(template_name);
       if (!template) {
@@ -85,6 +93,7 @@ export function registerExecuteWorkflow(server: McpServer, services: TunnelServi
       // The engine will push progress via WebSocket
       engine
         .execute(template, { autoMode: auto_mode, model, thinking, policy })
+        // TODO(SPEC-002): pass memoryLevel/fromSession to engine when WorkflowEngine supports them
         .then((result) => {
           process.stderr.write(
             `[workflow-engine] "${template_name}" completed: ${result.status}\n`

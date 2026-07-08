@@ -2,7 +2,7 @@
 
 **Feature**: `002-session-memory-share`
 **Created**: 2026-07-07
-**Status**: Draft
+**Status**: Implemented (2026-07-08)
 **Parent**: kimi-debug-tunnel v2.4
 
 ---
@@ -96,27 +96,27 @@
 ### FR-2：Session 冷启动自动注入
 
 - FR-2.1：`create_session` 创建时自动从 `project/meta` 拉取项目根信息（cwd、技术栈、编码约定）
-- FR-2.2：自动从 `project/decisions` 拉取与该 session 任务相关的决策（通过任务描述关键词匹配）
-- FR-2.3：自动从退役 session 的 `handoff` 命名空间拉取交接信息（若指定了接续的前置 session）
+- FR-2.2：自动从 `project/decisions` 拉取全部架构决策条目（MVP 阶段全量拉取；后续版本可增加关键词匹配过滤以节省 token）
+- FR-2.3：若通过 `create_session` 的 `from_session` 参数指定了前置 session，自动从该 session 的 `handoff` 命名空间拉取交接信息
 - FR-2.4：注入内容拼接为结构化 prompt 前缀，在用户指定的 prompt 之前注入，格式为明确的区块："【项目背景】【相关决策】【已知风险】【前置结论】"
 - FR-2.5：注入量可根据 `create_session` 新参数 `memory_level` 控制：`minimal`（仅 meta）、`standard`（meta+decisions）、`full`（全部匹配内容）
 
 ### FR-3：知识库版本与新鲜度
 
 - FR-3.1：`project/meta` 条目维护版本号，PM 更新时递增
-- FR-3.2：`create_session` 时检查知识库版本，若自上次 PM 更新后条目已过期（由 PM 标记），注入内容中附带警告标记
+- FR-3.2：`create_session` 时检查注入条目的 `expired` 标志（由 PM 通过 `memory_set` 主动标记），若有过期条目则在注入前缀中附带 `⚠️ 以下条目可能已过期` 警告标记
 - FR-3.3：新增 `memory_status` 工具——PM 查看知识库整体状态：条目数、最后更新时间、过期条目列表
 
 ### FR-4：权限与隔离
 
 - FR-4.1：PM（统筹 session）拥有 L1 项目知识库的完全读写权限
 - FR-4.2：任务 session 默认对 L1 只读，对自身的 L2 可读写
-- FR-4.3：任务 session 可通过 `create_session` 参数 `memory_write` 申请写入权限（写入 findings）
+- FR-4.3：[DEFER v2.6] 任务 session 可通过 `create_session` 参数 `memory_write` 申请写入权限（写入 findings）— MVP 阶段暂不实现，当前任务 session 无 MCP 工具访问权限，天然无法写入
 - FR-4.4：不同项目的知识库物理隔离（存储于项目根目录的 `.kimi-tunnel/memory.db`）
 
 ### FR-5：Session 退役知识归档
 
-- FR-5.1：退役流程自动将 session 的 L2 findings 打包为归档摘要
+- FR-5.1：退役流程支持将 session 的 L2 findings 打包为归档摘要（通过 `memory_archive` 工具手动触发；因 Kimi Server 无可靠 session close hook，暂不做自动退役）
 - FR-5.2：PM 审查后可将有价值条目提升为 L1 learnings
 - FR-5.3：`learn` skill 可从 L1 learnings 中提取跨项目可复用模式，存入向量数据库（L3）
 

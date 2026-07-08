@@ -107,6 +107,8 @@ export class WireClient {
   private policyEngine: PolicyEngine | null = null;
   // Message queue: broadcasts block events to WebSocket clients (PM Dashboard)
   private messageQueue: MessageQueue | null = null;
+  // Memory profiles: stores session → InjectionProfile mapping (SPEC 002)
+  private memoryProfiles = new Map<string, { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }>();
   // Wire log path cache: resolves sessionId → wire.jsonl path for audit logging
   private wireLogCache = new Map<string, string>();
 
@@ -165,6 +167,20 @@ export class WireClient {
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // Session creation
+
+  /**
+   * Store memory injection profile for a session (SPEC 002).
+   */
+  setMemoryProfile(sessionId: string, profile: { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }): void {
+    this.memoryProfiles.set(sessionId, profile);
+  }
+
+  /**
+   * Retrieve memory injection profile for a session (SPEC 002).
+   */
+  getMemoryProfile(sessionId: string): { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean } | null {
+    return this.memoryProfiles.get(sessionId) || null;
+  }
   // ═══════════════════════════════════════════════════════════════════════════════
 
   async createSession(options: CreateSessionOptions): Promise<{ sessionId: string; title: string }> {

@@ -1,5 +1,12 @@
 # 统筹 Session 准入规范 — 项目经理视角
 
+<!--
+修改记录:
+  2026-07-08 | kimi-code (v2.5) | 共享内存冷启动集成：§1.1 侦察成果复用；§1.4 prompt 注入简化；§1.5.7 三层内存架构 + PM 操作流程；§1.5.4 退役增加 memory_archive 步骤；§二 新增 §2.5 共享内存工具准入矩阵；§七 新增 v2.5 版本条目
+  2026-07-07 | kimi-code (v2.4) | 上线：策略阻断 + PM Dashboard
+  2026-07-07 | kimi-code (v2.3) | Skill 调度指南 + PM 身份升级
+-->
+
 > **你不是任务派发器，你是项目经理。**
 >
 > 本条线定义统筹 Session 的角色定位、决策框架、和执行规范。
@@ -99,6 +106,18 @@
 
 > **红线**：跳过侦察直接创建 session = 盲飞。不知道目标就开工的 PM 不合格。
 
+**侦察成果复用**：侦察阶段读完的规范文件，用 `memory_set` 录入项目知识库。后续创建的 task session 通过 `memory_level` 自动注入项目背景，**无需逐个 session 重读 spec 文件**——每次节省 25-40K 上下文。
+
+```
+# 一次性录入（PM 侦察阶段）
+memory_set(ns="project/meta", key="tech_stack", value="TypeScript 5.6, Node 24, MCP SDK 1.12")
+memory_set(ns="project/meta", key="conventions", value="DI via TunnelServices, 深模块优先, Guard Clauses ≤3")
+memory_set(ns="project/decisions", key="use_sqlite", value="node:sqlite 内置模块，零额外依赖")
+
+# 之后每次 create_session 自动注入（memory_level="standard" 为默认值）
+create_session(cwd="D:/code/kimi-debug-tunnel")  → session 启动即具备完整项目理解
+```
+
 ### 1.2 工作包拆分原则
 
 一个工作包 = 一个任务 session = 一个独立的、可验证的工作单元。
@@ -126,12 +145,14 @@
 给任务 session 的 prompt 必须包含：
 
 ```
-1. 上下文：引用相关 spec/contract 路径
+1. 上下文：引用相关 spec/contract 路径（**如果已通过 memory injection 注入项目背景，此步可省略**）
 2. 具体任务：一句话描述要做什么
 3. 明确产出：期望的输出格式和内容
 4. 成功标准：什么情况下算完成
 5. 边界约束：不要做什么、不要改什么
 ```
+
+> **v2.5 变更**：若 `create_session` 时设置了 `memory_level`（默认 `standard`），项目背景（技术栈、编码约定、架构决策）会在 `execute_prompt` 时**自动注入为 prompt 前缀**。PM 无需在每个 prompt 中重复项目上下文——只写任务本身即可。
 
 **示例 — 好 prompt：**
 > "审查 `specs/003-basic-rendering/data-model.md` 中 `DrawCall` 结构体定义与 `include/scene_assembly/render/pipeline/frame_graph.h` 源码的一致性。逐字段对比，列出差异。只读不写。"
@@ -213,7 +234,12 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
 ① 要求当前 session 执行 md-update
    → 将当前已完成的工作持久化到项目文档
 
-② **（条件执行）若本次任务的解决方案合规且有复用价值，执行 learn**
+② **（条件执行）若本次任务有有价值的发现，执行 memory_archive**
+   → 将 task session 的 findings 归档为 project/learnings
+   → memory_archive("当前session_id")
+   → 后续接续 session 可通过 from_session 自动获取这些发现
+
+③ **（条件执行）若本次任务的解决方案合规且有复用价值，执行 learn**
    → PM 自主判断：这个方案以后还会用到吗？是通用模式还是项目特有？
    → 判定标准：
      ✅ 可复用：通用设计模式、调试技巧、配置范式、跨项目适用的工作流
@@ -221,13 +247,13 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
    → 执行方式：向 session 发送 prompt "使用 learn skill，从本次对话中提炼可复用的经验"
    → learn 将经验存入向量数据库，未来 session 自动获益
 
-③ 用 list_io_records / read_session_log 提取关键产出
+④ 用 list_io_records / read_session_log 提取关键产出
    → PM 自己也要读一遍，确认哪些已完成、哪些未完成
 
-④ 关闭当前 session（不再发送新 prompt）
+⑤ 关闭当前 session（不再发送新 prompt）
    或保留为只读参考（不再用于执行任务）
 
-⑤ 创建新 session，首条 prompt 使用 **上下文交接模板**
+⑥ 创建新 session，首条 prompt 使用 **上下文交接模板**
 
    ⚠️ 新 session 对旧 session 的工作一无所知。必须显式传递以下全部信息，
    避免新 session 因上下文缺失而做出错误假设或重复已完成的工作。
@@ -275,7 +301,7 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
 
    > 模板中的每个区块都必须填写，不能留空。信息不完整 = 新 session 盲飞 = PM 失职。
 
-⑥ 首条 prompt 发送后不要立即追加第二条
+⑦ 首条 prompt 发送后不要立即追加第二条
    → 等新 session 读完规范文件、确认上下文后再派发具体任务
    → 可以在 prompt 末尾加："读完规范后回复'上下文已建立，等待任务'"
 ```
@@ -358,6 +384,76 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
 > **越权与冲动 = 注意力漂移的早期警报**。这不是 session "不听话"——是上下文累积已开始侵蚀其指令遵从能力。在幻觉出现之前主动退役，代价最低。
 >
 > **可复用方案 = 组织资产**。退役前评估 session 产出是否有跨项目复用价值，有则执行 `learn` 存入知识库——让每一次任务都成为未来 session 的起点。
+>
+> **研究一次，N 次复用**。PM 侦察阶段的研究成果录入 `memory_set`，后续所有 task session 自动注入——冷启动上下文浪费从 ~30K 降至 <5K。
+
+#### 1.5.7 共享内存驱动的冷启动（v2.5）
+
+> **问题**：每个 task session 启动后都要重读 spec/AGENTS.md 来建立项目理解，浪费 25-40K 上下文。5 个并行 session 总浪费可达 150K（占 360K 窗口的 41.7%）。
+>
+> **方案**：PM 一次性录入项目知识到共享内存 → task session 启动时零成本注入 → 直接进入工作。
+
+**三层内存架构**：
+
+```
+L1: 项目知识库 (project/*)     ← PM 一次性录入，全局只读，长期有效
+    meta / specs / decisions / risks / learnings
+
+L2: Session 上下文 (session:<id>/*) ← 运行时更新，退役后归档
+    findings / handoff / context
+
+L3: 学习沉淀 (learn skill → 向量库) ← 跨项目复用模式
+```
+
+**PM 操作流程**：
+
+```bash
+# ① 侦察阶段（一次性）
+memory_set("project/meta", "stack", "TS 5.6, Node 24, Express 4")
+memory_set("project/decisions", "di_pattern", "DI via TunnelServices, 禁止单例")
+
+# ② 创建 task session（自动注入，memory_level 默认 standard）
+create_session(cwd="D:/code/project", memory_level="standard")
+
+# ③ 下发任务（prompt 自动拼接项目背景前缀）
+execute_prompt(sid, "审查 src/types.ts 的类型定义")
+
+# Task session 收到的实际 prompt:
+# > [系统注入] 以下为项目共享知识...
+# ## 项目背景
+# - stack: TS 5.6, Node 24, Express 4
+# ## 相关决策
+# - di_pattern: DI via TunnelServices, 禁止单例
+# ---
+# 审查 src/types.ts 的类型定义
+```
+
+**注入级别**：
+
+| Level | 注入内容 | 适用场景 |
+|--------|----------|---------|
+| `off` | 无 | 临时 session、探索性任务 |
+| `minimal` | 仅 project/meta | 简单修复（不需要架构决策） |
+| `standard` | meta + decisions | 代码审查、常规开发（**默认**） |
+| `full` | meta + decisions + risks + learnings | 复杂重构、新人 session |
+
+**接续 session（审查→修复）**：
+
+```bash
+# 审查 session 完成后，修复 session 接续
+memory_archive("审查session_id")                    # 归档审查发现
+create_session(cwd, from_session="审查session_id")  # 自动注入审查结论
+```
+
+**知识过期管理**：
+
+```bash
+# 规范更新后标记旧条目过期
+memory_set("project/meta", "stack", "TS 5.6, Node 24", expire=true)
+memory_status  # 查看知识库全景——条目数、过期数、命名空间分布
+```
+
+> 下次 `create_session` 时，若注入条目含过期标记，session 收到的 prompt 会自动附带 ⚠️ 过期警告。
 
 ---
 
@@ -396,6 +492,17 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
 | `learn_workflow` | 将已验证成功的手动流程固化为模板——投资未来 |
 | `execute_workflow` | 标准化流程的"一键执行"，但 PM 仍需审查产出 |
 | `continue_workflow` | 只有在理解阻塞原因后才做决策——不盲目 retry |
+
+### 2.5 共享内存（v2.5）
+
+| 工具 | PM 使用模式 |
+|------|------------|
+| `memory_set` | **侦察后必调**——将项目规范、架构决策、已知风险录入 L1 知识库。一次录入，所有后续 task session 自动获益 |
+| `memory_get` | 查阅已录入的知识条目；排查注入内容是否正确 |
+| `memory_list` | 快速浏览知识库结构——有哪些命名空间、各有多少条目 |
+| `memory_delete` | 清理过时或错误的条目 |
+| `memory_status` | 定期检查知识库健康度——条目数、过期数、最后更新时间 |
+| `memory_archive` | **Session 退役前条件执行**——将 task session 的 findings 归档为 project/learnings，供接续 session 使用 |
 
 ---
 
@@ -647,6 +754,7 @@ AI session 的注意力会随上下文增长而衰减。PM 必须识别以下信
 
 | Tunnel 版本 | 关键变更 |
 |-------------|----------|
+| v2.5 | 共享内存冷启动——三层知识库（L1项目/L2 Session/L3向量）；6个 memory_* MCP工具；自动注入（create_session/execute_prompt 零成本拼接项目背景）；冷启动 token 节省 83%+ |
 | v2.3 | Skill 调度指南（§三）——39 个 skill 按 PM 场景分类；PM 自身技能与任务技能分离 |
 | v2.2 | 统筹 Session 定位升级为项目经理角色；新增 PM 决策框架、质量门、工作分解规范 |
 | v2.1 | `sanitizeText` 反斜杠预加固 + 控制字符清洗；`max_content_length` 可配截断 |
