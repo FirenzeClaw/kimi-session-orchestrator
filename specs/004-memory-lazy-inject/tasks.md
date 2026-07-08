@@ -106,7 +106,7 @@
 
 - [x] T013 Verify SC-2 (size reduction) — measure `buildInjection({level: "full"})` output byte length with 4 entries. Result: minimal 109B, standard 194B, full 332B (all verified via unit test).
 
-- [ ] T014 [P] Verify SC-3 (self-read trigger) — create session with `memory_level="full"`, send task, check wire log for `memory_get` tool calls in first turn. _Deferred: requires live tunnel MCP session._
+- [x] T014 [P] Verify SC-3 (self-read trigger) — live test session `592d061a` confirmed: 3 `memory_get` calls in first turn step 1. ✅ See `verification.md`.
 
 - [ ] T015 [P] Verify SC-5 (quality comparison) — create two sessions. _Deferred: requires live tunnel MCP session._
 
