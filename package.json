@@ -1,10 +1,10 @@
 {
-  "name": "kimi-debug-tunnel",
+  "name": "kimi-session-orchestrator",
   "version": "1.0.0",
   "description": "MCP debug tunnel server with HTTP+WebSocket console for Kimi Code CLI session orchestration",
   "main": "dist/index.js",
   "bin": {
-    "kimi-debug-tunnel": "dist/index.js"
+    "kimi-session-orchestrator": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && node -e \"require('fs').mkdirSync('dist/public',{recursive:true})\" && cp -r src/public/* dist/public/",

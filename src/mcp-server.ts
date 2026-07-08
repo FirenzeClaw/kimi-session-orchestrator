@@ -30,7 +30,7 @@ import { registerMemoryArchive } from "./tools/memory-archive.js";
 
 export async function startMcpServer(services: TunnelServices): Promise<void> {
   const server = new McpServer({
-    name: "kimi-debug-tunnel",
+    name: "kimi-session-orchestrator",
     version: "2.0.0",
     description:
       "Kimi Code CLI 调试隧道 v2——通过 WebSocket Wire 协议实现推送式全自动化 session 统筹。支持多轮对话编排、实时流式响应、智能思考过滤。",
@@ -74,5 +74,5 @@ export async function startMcpServer(services: TunnelServices): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write("[kimi-debug-tunnel] MCP server connected via stdio\n");
+  process.stderr.write("[kimi-session-orchestrator] MCP server connected via stdio\n");
 }

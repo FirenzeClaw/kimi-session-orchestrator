@@ -40,8 +40,8 @@
 <!-- AUTO:PROJECT-META -->
 ## 项目元信息
 
-- **项目**: kimi-debug-tunnel
-- **仓库**: https://github.com/FirenzeClaw/kimi-debug-tunnel.git
+- **项目**: kimi-session-orchestrator
+- **仓库**: https://github.com/FirenzeClaw/kimi-session-orchestrator.git
 - **分支**: master
 - **技术栈**: TypeScript 5.6, Node.js ≥ 18, Express 4, WebSocket (ws), MCP SDK 1.12, Zod 3
 - **类型**: MCP 服务器 + HTTP/WebSocket 调试隧道

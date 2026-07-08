@@ -188,7 +188,7 @@ export function startHttpServer(port: number, services: TunnelServices): void {
   httpServer.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
       process.stderr.write(
-        `[kimi-debug-tunnel] Port ${port} already in use — HTTP server skipped (MCP stdio still available)\n`
+        `[kimi-session-orchestrator] Port ${port} already in use — HTTP server skipped (MCP stdio still available)\n`
       );
     } else {
       throw err;
@@ -197,7 +197,7 @@ export function startHttpServer(port: number, services: TunnelServices): void {
 
   httpServer.listen(port, "0.0.0.0", () => {
     process.stderr.write(
-      `[kimi-debug-tunnel] HTTP+WS server listening on http://0.0.0.0:${port}\n`
+      `[kimi-session-orchestrator] HTTP+WS server listening on http://0.0.0.0:${port}\n`
     );
   });
 }
