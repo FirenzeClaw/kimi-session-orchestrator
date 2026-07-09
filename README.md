@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline——memory_archive + 7-block 模板 + 新 session 启动自举协议；项目 skills/ 库新增第 4 个 skill
   2026-07-08 | kimi-code (v2.6) | 实施 004-memory-lazy-inject：注入策略升级——全量预载 → 索引+按需自读（minimal/standard/full 三级）；角色锚定"你是任务 session"；>20条自动折叠；注入文本 ~600B→~200B；Live test 通过
   2026-07-08 | kimi-code (v2.5) | 实施 002-session-memory-share：三层共享内存系统——MemoryStore（node:sqlite 零依赖）+ 8个MCP工具（memory_*）+ 自动注入（create_session/execute_prompt）
   2026-07-07 | kimi-code (v2.4) | 实施 003-permission-policy：三层权限系统——策略引擎 + 工具级拦截 + 3内置策略 + 自定义YAML + 3新MCP工具（list_policies/approve_tool/deny_tool）；工具总数 19→22；selftest通过
@@ -18,7 +19,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.6-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.7-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-28-orange)]()
 
@@ -251,9 +252,15 @@ userscript/                      # Tampermonkey 用户脚本源
 
 scripts/
 └── build-userscript.mjs         # 共享代码内联 → .user.js
+
+skills/                          # 配套 Skill（4 个）
+├── kimi-session-orchestrator/   # Agent 级——MCP 工具使用规范
+├── session-retire/              # PM 级——退役与接班自动化 pipeline（v2.7 新增）
+├── agent-session-monitor.md     # wire.jsonl 状态推断
+└── mcp-async-tool.md            # 异步工具设计模式
 ```
 
-> **v2.7 变更**：`src/public/console.html` 和 `workflow-console.html` 已移除。监控 UI 迁移至浏览器扩展 + JS 脚本插件，直接注入 Kimi Web UI 侧边栏。
+> **v2.7 变更**：`src/public/console.html` 和 `workflow-console.html` 已移除。监控 UI 迁移至浏览器扩展 + JS 脚本插件，直接注入 Kimi Web UI 侧边栏。新增 `session-retire` skill——退役→接班自动化 pipeline（memory_archive + 7-block 模板 + 新 session 启动自举协议）。
 
 ## 共享记忆系统（v2.5+）
 
@@ -288,7 +295,7 @@ PM 操作:                            Task session 首 turn:
 | 文档 | 用途 |
 |------|------|
 | `API.md` | Kimi Server REST API 完整参考 |
-| `docs/coordinator-guide.md` | 统筹 Session 准入规范（PM视角 v2.6） |
+| `docs/coordinator-guide.md` | 统筹 Session 准入规范（PM视角 v2.7） |
 | `docs/issues/memory-init-timing.md` | [FIXED] MemoryStore 启动初始化缺陷 |
 | `docs/issues/memory-cross-project-injection.md` | [FIXED] 跨项目注入静默失效 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎 [DONE] |
@@ -356,6 +363,9 @@ EOF
 ```bash
 # 复制 skill 目录（含 SKILL.md + coordinator-guide.md）
 cp -r skills/kimi-session-orchestrator ~/.agents/skills/kimi-session-orchestrator
+
+# PM 专用 skill（退役与接班自动化 pipeline）
+cp -r skills/session-retire ~/.kimi-code/skills/session-retire
 
 # 新 session 自动加载，触发 PM 启动协议：
 #   ① 读取 coordinator-guide 建立规范基线

@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline；skills/ 库 3→4；AGENTS.md/README/coordinator-guide 同步更新
   2026-07-08 | kimi-code (fix) | Ubuntu 部署修复 3 项：① WireClient connect() 3×2s→6级指数退避（1s→32s，最长~63s）+ connecting 并发防护；② 启动失败后调用 startHealthCheck() 持续每10s重连（解决启动时序问题）；③ WorkflowEngine +setMemoryStore，run_flow/execute_workflow 传递 memory_level/from_session（修复 2 个 TODO）；selftest通过（编译零错误，Windows 兼容无回归）
   2026-07-08 | kimi-code (feature) | 实施 specs/004-memory-lazy-inject：buildInjection() 从全量预载改为索引+按需自读（minimal/standard/full 三级格式）；注入文本 ~600B→~200B（标准级）；角色锚定"你是任务 session"；>20条自动折叠；selftest通过（109B/194B/332B/68B/390B）
   2026-07-08 | kimi-code (fix) | 记忆系统 2 个缺陷修复：① 启动时主动 ensureDb() 解决管理工具未初始化问题；② TunnelServices +tunnelProjectRoot 解决跨项目注入静默失效——注入不再依赖 session cwd，始终使用 tunnel 自身 memory.db；selftest + 极限测试通过（2字prompt纯记忆应答、空目录零文件对照）
@@ -253,12 +254,22 @@ for m in data.get('items',[]):
 
 ## Agent Skills
 
-本项目配套 3 个 Agent skill，安装到 `~/.agents/skills/` 后自动生效：
+本项目配套 4 个 skill，安装后自动生效：
 
-| Skill | 用途 | 文件 |
-|-------|------|------|
-| `kimi-session-orchestrator` | MCP 工具完整使用规范——即发即返、后台轮询、工具速查、红线规则 | `skills/kimi-session-orchestrator/SKILL.md` |
-| `agent-session-monitor` | 通过 wire.jsonl 尾部日志推断 session 运行状态（无需 API 认证） | `skills/agent-session-monitor.md` |
-| `mcp-async-tool` | MCP 异步工具设计模式——解决 >30s 任务被协议超时截断的问题 | `skills/mcp-async-tool.md` |
+| Skill | 用途 | 文件 | 安装位置 |
+|-------|------|------|---------|
+| `kimi-session-orchestrator` | MCP 工具完整使用规范——即发即返、后台轮询、工具速查、红线规则 | `skills/kimi-session-orchestrator/SKILL.md` | `~/.agents/skills/` |
+| `agent-session-monitor` | 通过 wire.jsonl 尾部日志推断 session 运行状态（无需 API 认证） | `skills/agent-session-monitor.md` | `~/.agents/skills/` |
+| `mcp-async-tool` | MCP 异步工具设计模式——解决 >30s 任务被协议超时截断的问题 | `skills/mcp-async-tool.md` | `~/.agents/skills/` |
+| `session-retire` | **PM 专用**——退役 task session + 自动化接班 pipeline：归档记忆 → 提取上下文 → 创建接班 session → 注入 7-block 模板 → 新 session 自举 | `skills/session-retire/SKILL.md` | `~/.kimi-code/skills/` |
 
-**安装**：将 `skills/*.md` 复制到 `~/.agents/skills/<name>/SKILL.md`，新 session 自动加载。
+**安装**：
+```bash
+# Agent 级 skill（新 session 自动加载）
+cp -r skills/kimi-session-orchestrator ~/.agents/skills/kimi-session-orchestrator
+cp skills/agent-session-monitor.md ~/.agents/skills/agent-session-monitor/SKILL.md
+cp skills/mcp-async-tool.md ~/.agents/skills/mcp-async-tool/SKILL.md
+
+# PM 级 skill（统筹 session 按需调用）
+cp -r skills/session-retire ~/.kimi-code/skills/session-retire
+```
