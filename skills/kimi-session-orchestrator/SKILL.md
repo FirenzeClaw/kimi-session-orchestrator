@@ -67,7 +67,7 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用——
 ### Session 管理
 | 工具 | 用途 | 关键参数 |
 |------|------|----------|
-| `create_session` | 创建新 Kimi Code session | `cwd`, `permission_mode`(auto/manual/yolo), `model`, `thinking`, `memory_level`, `policy` |
+| `create_session` | 创建新 Kimi Code session，自动注入记忆索引 | `cwd`, `permission_mode`(auto/manual/yolo), `model`, `thinking`, `memory_level`(minimal/standard/full), `policy` |
 | `list_sessions` | 列出所有 session | `limit` |
 | `get_session_info` | 查看 session 详情（含 wirePath） | `session_id` |
 
@@ -95,6 +95,34 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用——
 | `memory_list` | 列出命名空间 |
 | `memory_status` | 知识库全景 |
 | `memory_archive` | 归档 session findings → L1 learnings |
+
+#### 记忆注入策略（v2.6）
+
+> `create_session(memory_level)` 时自动注入**记忆索引**（非全量内容）。task session 首 turn 自主调用 `memory_get` 按需读取。
+
+| `memory_level` | 注入内容 | 适用场景 |
+|:---|:---|:---|
+| `minimal` | 仅角色锚定 + key 计数，不含键名列表 | session 不需要项目背景 |
+| `standard`（默认） | 命名空间 → 键名 → 读取建议，>20条自动折叠 | 常规任务，项目知识库 ≤ 50 条 |
+| `full` | 完整 memory_get 输出（所有条目内容，**不使用**） | 已废弃——改用 standard + 按需自读 |
+
+**注入格式示例（standard）**：
+
+```
+[系统注入] 你是任务 session。使用 memory_get 按需读取：
+
+- memory_get("project/meta") — 项目背景（必读）
+- memory_get("project/decisions") — 架构决策（必读）
+
+（共 12 条可用，已折叠 2 条。用 memory_list 查看全部）
+```
+
+**红线**：
+- 不要用 `full`——会把全部知识塞进 prompt，浪费 token
+- task session 收到索引后必须在首 turn 调用 `memory_get` 拉取所需条目
+- 不要在 `execute_prompt` 中手动拼接项目背景——注入已自动完成
+
+> 详细规范见 `coordinator-guide.md` §1.5.7（三层内存架构 + PM 操作流程）。
 
 ### 后台监听
 | 工具 | 用途 |
@@ -127,9 +155,11 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用——
 ```
 ① create_session(cwd="/path", permission_mode="auto", memory_level="standard")
    → { session_id }
+   → 自动注入记忆索引（命名空间 + 键名 + 读取建议）到 session 首 turn
 
 ② execute_prompt(session_id, "任务描述", auto_mode=true)
    → { submitted: true, poll_command: "..." }
+   → task session 首 turn 收到索引 → 自主 memory_get 拉取所需条目 → 执行任务
 
 ③ Bash(run_in_background=true, command=poll_command)
    → 后台轮询，完成时自动通知
