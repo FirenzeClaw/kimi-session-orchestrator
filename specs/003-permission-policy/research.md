@@ -11,7 +11,7 @@
 
 - Kimi Server 通过 WebSocket 推送 session 状态变更事件（`event.session.status_changed`）
 - 当 session 因工具调用需要审批时，状态变为 `awaiting_approval`
-- kimi-debug-tunnel 已有 `wire-client.ts:approveAll()` 方法，通过 `POST /api/v1/sessions/{id}/approvals/{approval_id}` 自动审批
+- kimi-session-orchestrator 已有 `wire-client.ts:approveAll()` 方法，通过 `POST /api/v1/sessions/{id}/approvals/{approval_id}` 自动审批
 
 ### 决策：在 `awaiting_approval` 事件处理中插入策略检查
 

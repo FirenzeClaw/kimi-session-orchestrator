@@ -3,7 +3,7 @@
 **Feature**: `002-session-memory-share`
 **Created**: 2026-07-07
 **Status**: Implemented (2026-07-08)
-**Parent**: kimi-debug-tunnel v2.4
+**Parent**: kimi-session-orchestrator v2.4
 
 ---
 

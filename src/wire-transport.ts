@@ -32,7 +32,14 @@ export class WireTransport {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
 
-    const resp = await fetch(url, { headers });
+    let resp: Response;
+    try {
+      resp = await fetch(url, { headers });
+    } catch (err) {
+      const cause = (err as Error)?.cause;
+      const detail = cause ? `cause=${(cause as Error).message || cause}` : "";
+      throw new Error(`fetch GET ${path} failed: ${(err as Error).message}${detail ? ` (${detail})` : ""}`);
+    }
     if (!resp.ok) {
       throw new Error(`API GET ${path} failed: ${resp.status}`);
     }

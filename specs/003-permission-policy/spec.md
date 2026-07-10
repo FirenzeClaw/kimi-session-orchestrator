@@ -3,13 +3,13 @@
 **Feature**: `003-permission-policy`
 **Created**: 2026-07-07
 **Status**: Draft
-**Parent**: kimi-debug-tunnel v2.4
+**Parent**: kimi-session-orchestrator v2.4
 
 ---
 
 ## 问题陈述
 
-当前 kimi-debug-tunnel 的权限控制仅支持 session 级别的 `permission_mode`（auto/manual/yolo），存在三个核心局限：
+当前 kimi-session-orchestrator 的权限控制仅支持 session 级别的 `permission_mode`（auto/manual/yolo），存在三个核心局限：
 
 1. **粒度不足**：无法为单个任务指定工具级权限。一个需要执行构建的任务 session 和只需要读文件的任务 session 拥有相同的工具访问权限
 2. **无策略复用**：权限配置无法保存为可复用模板。PM 每次创建 session 都需要重新描述权限约束，或接受默认的全量权限
@@ -143,7 +143,7 @@ rules:
 
 - 策略在 session 创建时绑定，session 生命周期内不可自动更改。PM 可通过 `approve_tool(scope="session")` 进行有意识的运行时豁免（如临时放行特定工具），豁免记录写入日志供审计。非 PM 发起的策略变更是禁止的
 - 内置策略 `read-only` 和 `safe-edit` 的工具列表是固定的，不可自定义
-- 策略引擎运行在 kimi-debug-tunnel 进程内，不依赖外部服务
+- 策略引擎运行在 kimi-session-orchestrator 进程内，不依赖外部服务
 - 工具调用拦截通过 MCP 工具注册层的包装实现，不需要修改 kimi-code 本身
 - 与现有 `coordinator-guide.md` §1.5.6（越权与冲动控制）互补——策略是事前预防，越权检测是事后审计
 

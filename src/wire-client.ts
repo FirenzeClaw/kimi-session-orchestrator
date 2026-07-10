@@ -9,8 +9,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { writeFileSync, mkdirSync, appendFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { writeFileSync, mkdirSync, appendFileSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { WebSocket } from "ws";
 import { WireTransport } from "./wire-transport.js";
 import type { PolicyEngine } from "./policy-engine.js";
@@ -102,8 +103,10 @@ export class WireClient {
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
   private healthFailCount = 0;
   private connecting = false; // guard against concurrent connect() calls
+  private wsReconnectAttempts = 0;
   private static HEALTH_CHECK_INTERVAL_MS = 10_000;
   private static HEALTH_MAX_FAILS = 3;
+  private static WS_MAX_RECONNECT_ATTEMPTS = 10;
   // Policy engine: checks tool calls against session policies
   private policyEngine: PolicyEngine | null = null;
   // Message queue: broadcasts block events to WebSocket clients (PM Dashboard)
@@ -115,7 +118,7 @@ export class WireClient {
 
   constructor(sessionId?: string) {
     this.baseUrl =
-      process.env.KIMI_SERVER_URL || "http://127.0.0.1:5494";
+      process.env.KIMI_SERVER_URL || detectKimiServerUrl();
     this.token =
       process.env.KIMI_SERVER_TOKEN || "";
     this.sessionId = sessionId || "";
@@ -250,19 +253,23 @@ export class WireClient {
           return;
         } catch (err) {
           const isLastAttempt = attempt === delays.length - 1;
+          const errMsg = (err as Error).message || String(err);
           if (isLastAttempt) {
+            process.stderr.write(
+              `[wire-client] All ${delays.length} connection attempts exhausted (last error: ${errMsg}, baseUrl=${this.baseUrl})\n`
+            );
             if (!this.token) {
               throw new Error(
                 `Cannot connect to Kimi server at ${this.baseUrl}. Start with: kimi web --no-open. Then set KIMI_SERVER_TOKEN env var.`
               );
             }
             throw new Error(
-              `Cannot connect to Kimi server at ${this.baseUrl}: ${(err as Error).message}`
+              `Cannot connect to Kimi server at ${this.baseUrl}: ${errMsg}`
             );
           }
           const delay = delays[attempt];
           process.stderr.write(
-            `[wire-client] Connection attempt ${attempt + 1}/${delays.length} failed: ${(err as Error).message}. Retrying in ${delay}ms...\n`
+            `[wire-client] Connection attempt ${attempt + 1}/${delays.length} failed: ${errMsg} (baseUrl=${this.baseUrl}). Retrying in ${delay}ms...\n`
           );
           await sleep(delay);
         }
@@ -313,6 +320,7 @@ export class WireClient {
 
           if (frame.type === "server_hello") {
             clearTimeout(timeout);
+            this.wsReconnectAttempts = 0;
             process.stderr.write(`[wire-client] WebSocket connected (${this.wsClientId})\n`);
             if (this.sessionId) this.wsSubscribe(this.sessionId);
             resolve();
@@ -339,12 +347,21 @@ export class WireClient {
 
       ws.onclose = () => {
         this.ws = null;
-        // Auto-reconnect after 3s
+        clearTimeout(timeout);
+        // Auto-reconnect with exponential backoff and max attempts cap
         if (this.connected) {
-          this.wsReconnectTimer = setTimeout(() => {
-            process.stderr.write("[wire-client] WebSocket reconnecting...\n");
-            this.wsConnect().catch(() => {});
-          }, 3000);
+          this.wsReconnectAttempts++;
+          if (this.wsReconnectAttempts <= WireClient.WS_MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(3000 * Math.pow(2, this.wsReconnectAttempts - 1), 60_000);
+            this.wsReconnectTimer = setTimeout(() => {
+              process.stderr.write("[wire-client] WebSocket reconnecting...\n");
+              this.wsConnect().catch(() => {});
+            }, delay);
+          } else {
+            process.stderr.write(
+              `[wire-client] WebSocket reconnect exhausted after ${WireClient.WS_MAX_RECONNECT_ATTEMPTS} attempts — sticking with REST polling\n`
+            );
+          }
         }
       };
     });
@@ -955,6 +972,21 @@ export class WireClient {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Auto-detect Kimi Server URL from the lock file. */
+export function detectKimiServerUrl(): string {
+  try {
+    const lockPath = join(homedir(), ".kimi-code", "server", "lock");
+    const raw = readFileSync(lockPath, "utf-8");
+    const info = JSON.parse(raw) as { host: string; port: number };
+    if (info.host && info.port) {
+      return `http://${info.host}:${info.port}`;
+    }
+  } catch {
+    // lock file not found or unreadable
+  }
+  return "http://127.0.0.1:5494";
 }
 
 /** Extract tool name from approval description text (fallback when tool_name field is absent).

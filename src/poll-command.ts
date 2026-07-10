@@ -8,6 +8,8 @@
  * Auto-detects python3 vs python for cross-platform compatibility.
  */
 
+import { detectKimiServerUrl } from "./wire-client.js";
+
 export interface PollConfig {
   sessionId: string;
   baseUrl?: string;
@@ -15,7 +17,7 @@ export interface PollConfig {
 }
 
 export function generatePollCommand(config: PollConfig): string {
-  const baseUrl = config.baseUrl || process.env.KIMI_SERVER_URL || "http://127.0.0.1:5494";
+  const baseUrl = config.baseUrl || process.env.KIMI_SERVER_URL || detectKimiServerUrl();
   const token = config.token || process.env.KIMI_SERVER_TOKEN || "";
   const authHeader = token ? `-H "Authorization: Bearer ${token}"` : "";
 

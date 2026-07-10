@@ -4,13 +4,13 @@
 **Branch**: `master`
 **Date**: 2026-07-08
 **Status**: Planning
-**Parent**: kimi-debug-tunnel v2.5
+**Parent**: kimi-session-orchestrator v2.5
 
 ---
 
 ## 1. Summary
 
-在 kimi-debug-tunnel 中新增三层共享内存系统，解决任务 session 冷启动时重复阅读项目规范的上下文浪费问题。核心交付：
+在 kimi-session-orchestrator 中新增三层共享内存系统，解决任务 session 冷启动时重复阅读项目规范的上下文浪费问题。核心交付：
 
 - **SQLite 存储层** (`memory-store.ts`)：`node:sqlite` 内置模块，零额外依赖
 - **6 个新 MCP 工具**：`memory_set`, `memory_get`, `memory_list`, `memory_delete`, `memory_status`, `memory_archive`
@@ -241,7 +241,7 @@ Phase 2: Foundational (T003–T006) ─── blocks ALL user stories
 | `node:sqlite` 在低版本 Node 不可用 | 低 | 高 | 启动时检测，不可用则报 clear error + 建议升级 Node ≥22 |
 | 注入过大导致 prompt 超长被截断 | 中 | 中 | 8K 硬上限 + 截断提示；用户可通过 `memory_level` 控制 |
 | cwd 不在项目根目录（子目录中执行） | 中 | 低 | `resolveProjectRoot()` 向上遍历，确保找到 `.kimi-tunnel/` |
-| SQLite 并发写入冲突 | 低 | 低 | kimi-debug-tunnel 单进程，无并发写入场景 |
+| SQLite 并发写入冲突 | 低 | 低 | kimi-session-orchestrator 单进程，无并发写入场景 |
 | 与 SPEC 003 的 `.kimi-tunnel/policies/` 目录共存 | 无 | — | 不同子路径，无冲突（policies/ vs memory.db） |
 
 ---

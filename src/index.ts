@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { WireClient } from "./wire-client.js";
+import { WireClient, detectKimiServerUrl } from "./wire-client.js";
 import { MessageQueue } from "./message-queue.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { PolicyEngine } from "./policy-engine.js";
@@ -65,10 +65,10 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     process.stderr.write(
-      `[kimi-session-orchestrator] WARNING: Kimi server not available at ${process.env.KIMI_SERVER_URL || "http://127.0.0.1:5494"}: ${(err as Error).message}\n`
+      `[kimi-session-orchestrator] WARNING: Kimi server not available at ${process.env.KIMI_SERVER_URL || detectKimiServerUrl()}: ${(err as Error).message}\n`
     );
     process.stderr.write(
-      "[kimi-session-orchestrator] Start with: kimi web --no-open --port 5494\n"
+      "[kimi-session-orchestrator] Start with: kimi web --no-open\n"
     );
     process.stderr.write(
       "[kimi-session-orchestrator] Set KIMI_SERVER_TOKEN env var if auth required\n"

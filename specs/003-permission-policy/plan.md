@@ -9,7 +9,7 @@
 
 ## 1. Summary
 
-在 kimi-debug-tunnel 中新增三层权限系统（Session 级 + 任务级策略 + 工具级拦截）。核心交付：
+在 kimi-session-orchestrator 中新增三层权限系统（Session 级 + 任务级策略 + 工具级拦截）。核心交付：
 - **策略引擎模块** (`policy-engine.ts`)：加载/解析/执行策略规则
 - **3 个内置策略** (`read-only`, `safe-edit`, `full-access`)
 - **自定义策略支持** (YAML 文件，`.kimi-tunnel/policies/`)

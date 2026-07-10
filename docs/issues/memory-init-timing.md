@@ -138,9 +138,9 @@ const memoryStore = new MemoryStore();
 const projectRoot = memoryStore.resolveProjectRoot(process.cwd());
 if (projectRoot) {
   memoryStore.ensureDb(projectRoot);
-  process.stderr.write(`[kimi-debug-tunnel] Memory DB: ${projectRoot}/.kimi-tunnel/memory.db\n`);
+  process.stderr.write(`[kimi-session-orchestrator] Memory DB: ${projectRoot}/.kimi-tunnel/memory.db\n`);
 } else {
-  process.stderr.write("[kimi-debug-tunnel] Memory DB: .kimi-tunnel/ not found, deferred\n");
+  process.stderr.write("[kimi-session-orchestrator] Memory DB: .kimi-tunnel/ not found, deferred\n");
 }
 ```
 

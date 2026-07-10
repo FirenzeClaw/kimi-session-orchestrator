@@ -82,7 +82,7 @@
 
 **Implementation**:
 - `memory_set`: 记录 `source_session_id` = 当前调用者的 MCP session（无法直接获取，改用可选 `session_id` 参数由 AI 传入）
-- 实际简化：由于 kimi-debug-tunnel MCP 工具由统筹 session 调用，所有 memory_* 调用天然来自 PM，无需额外鉴权
+- 实际简化：由于 kimi-session-orchestrator MCP 工具由统筹 session 调用，所有 memory_* 调用天然来自 PM，无需额外鉴权
 - 任务 session 无 MCP 工具访问权限，天然无法调用 memory_set
 - `memory_delete`: 增加 `force` 参数，默认 false 时仅允许删除自己创建的条目
 
