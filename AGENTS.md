@@ -1,5 +1,6 @@
 <!--
 修改记录:
+  2026-07-10 | kimi-code (fix) | Wire Client 连接鲁棒性 3 项修复：① 新增 detectKimiServerUrl() 从 ~/.kimi-code/server/lock 自动检测 Kimi Server 端口（解决 KIMI_SERVER_URL 未设时默认 5494 与实际端口不匹配的问题）；② WebSocket 重连加指数退避（3s→60s，最多 10 次）+ clearTimeout 防泄漏（解决无限制重连堆积 100+ TCP 连接耗尽系统资源导致 fetch 失败的问题）；③ connect() 错误日志加 baseUrl 诊断 + wire-transport fetch 错误含 cause 详情；④ index.ts/poll-command/execute-workflow 硬编码端口全部变量化；⑤ 项目命名全局统一：kimi-debug-tunnel → kimi-session-orchestrator（mcp.json + docs/ + specs/）；selftest 通过（编译零错误，测试结果 wireConnected=true，create_session 成功）
   2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline；skills/ 库 3→4；AGENTS.md/README/coordinator-guide 同步更新
   2026-07-08 | kimi-code (fix) | Ubuntu 部署修复 3 项：① WireClient connect() 3×2s→6级指数退避（1s→32s，最长~63s）+ connecting 并发防护；② 启动失败后调用 startHealthCheck() 持续每10s重连（解决启动时序问题）；③ WorkflowEngine +setMemoryStore，run_flow/execute_workflow 传递 memory_level/from_session（修复 2 个 TODO）；selftest通过（编译零错误，Windows 兼容无回归）
   2026-07-08 | kimi-code (feature) | 实施 specs/004-memory-lazy-inject：buildInjection() 从全量预载改为索引+按需自读（minimal/standard/full 三级格式）；注入文本 ~600B→~200B（标准级）；角色锚定"你是任务 session"；>20条自动折叠；selftest通过（109B/194B/332B/68B/390B）
@@ -116,9 +117,9 @@ npm run inspector    # MCP Inspector 调试模式
 ```
 
 **前置条件**：
-1. 启动 Kimi Server: `kimi web --no-open --port 5494`
+1. 启动 Kimi Server: `kimi web --no-open`（Tunnel 自动从 lock 文件检测端口）
 2. 设置 token: `export KIMI_SERVER_TOKEN="<printed-at-startup>"`
-3. 启动 Tunnel: `npm start`
+3. 启动 Tunnel: `npm start`（或配置 `KIMI_SERVER_URL` 环境变量覆盖自动检测）
 <!-- AUTO:END -->
 
 ## 项目约定

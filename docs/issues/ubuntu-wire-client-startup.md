@@ -1,11 +1,13 @@
 # Ubuntu 部署：Wire Client 启动时序与端口发现问题
 
-**状态**: 已修复 (2026-07-08)  
-**修复方式**: 方案 D（指数退避）+ 定时重连 —— connect() 从 3×2s 改为 6 级指数退避（1s→32s，最长 ~63s）；index.ts 启动失败后调用 `wireClient.startHealthCheck()` 持续每 10s 重连；`startHealthCheck()` 改为 public 方法  
-**修复文件**: wire-client.ts (+connecting 并发防护, +指数退避, startHealthCheck→public), index.ts (catch 块启动定时重连, +URL 提示)  
+**状态**: 已修复 (2026-07-08) — 后续改进 (2026-07-10): 端口自动检测  
+**修复方式**: 
+- (2026-07-08) 方案 D（指数退避）+ 定时重连 —— connect() 从 3×2s 改为 6 级指数退避（1s→32s，最长 ~63s）；index.ts 启动失败后调用 `wireClient.startHealthCheck()` 持续每 10s 重连；`startHealthCheck()` 改为 public 方法  
+- (2026-07-10) **端口自动检测** —— 新增 `detectKimiServerUrl()` 从 `~/.kimi-code/server/lock` 自动读取 Kimi Server 实际端口，彻底消除 `KIMI_SERVER_URL` 手动配置需求。现在 `kimi web --no-open` 即用，无需 `--port` 参数。
+**修复文件**: wire-client.ts (+connecting 并发防护, +指数退避, +detectKimiServerUrl, startHealthCheck→public), index.ts (catch 块启动定时重连, +URL 提示)  
 **发现日期**: 2026-07-08  
-**严重度**: P0（部署阻断——首次启动成功率 0%）  
-**影响范围**: Linux/macOS 首次部署，Windows 不受影响（固定端口 5494）
+**严重度**: P0（部署阻断——首次启动成功率 0%） → **已解决**  
+**影响范围**: Linux/macOS/Windows 全平台，自动检测后不再受端口影响
 
 ---
 
