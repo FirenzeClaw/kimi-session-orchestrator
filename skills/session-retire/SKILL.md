@@ -125,14 +125,19 @@ description: Use when retiring a task session and spawning a successor with full
 
 ### Phase 5 — 汇报退役结果
 
+**必须以完整 ID 展示**——不截断、不缩写，方便用户直接选中复制以手动创建接班 session 或排查。
+
 ```
 退役完成:
-- 退役 session: <retiring_id> → cwd: <cwd>
+- 退役 session: <retiring_id>（完整 ID）
+  → cwd: <cwd>
 - 归档: N 条 finding → project/learnings
-- 接班 session: <new_session_id>
-- 上下文: 7-block 模板 + memory_level=full + 启动自举指令
+- 接班 session: <new_session_id>（完整 ID）
+  → 上下文: 7-block 模板 + memory_level=full + 启动自举指令
 - 下一步: 等待新 session 确认上下文建立后分派任务
 ```
+
+> **注意**：两个 session ID 必须完整输出。若 ID 被 MCP 工具截断，需单独调用 `get_session_info` 确认完整 ID 后再输出。
 
 ## 启动自举协议（新 session 视角）
 
