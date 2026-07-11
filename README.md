@@ -12,6 +12,7 @@ Kimi Code CLI 的 PM 视角多 session 编排系统——28 个 MCP 工具，支
 ## 目录
 
 - [架构](#架构)
+- [⛔ 部署必读](#-部署必读)
 - [快速开始](#快速开始)
   - [前置条件](#前置条件)
   - [安装](#安装)
@@ -60,6 +61,16 @@ Kimi Code CLI 的 PM 视角多 session 编排系统——28 个 MCP 工具，支
 │   POST /api/v1/sessions/... │
 └─────────────────────────────┘
 ```
+
+## ⛔ 部署必读
+
+| # | 规则 | 违反后果 |
+|---|------|----------|
+| 1 | **不要在 `mcp.json` 的 `env` 中设置 `KIMI_SERVER_URL`** | Kimi Server 每次启动端口可能不同，硬编码会导致 `Connection refused` |
+| 2 | **`KIMI_SERVER_TOKEN` 必须在 `mcp.json` 的 `env` 中设置** | 否则 tunnel 无法通过 Kimi Server 认证 |
+| 3 | **Tunnel 端口自动从 `~/.kimi-code/server/lock` 检测** | 无需任何手动配置 |
+| 4 | **安装后执行 `/reload`** | 否则 MCP 工具和 skill 不生效 |
+| 5 | **更新代码后需重装 skill**：`git pull` → `npm run build` → 重装 skill → `/reload` | 仅 build 不更新 skill 文件 |
 
 ## 快速开始
 
