@@ -13,11 +13,17 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用
 
 ### Auto 检测
 
-检查当前 session 是否处于 auto permission mode。若是 → 先调用 ExitPlanMode 退出 auto（auto 模式下 AskUserQuestion 不可用）。
+如果当前 session 处于 auto permission mode（系统提示 `Auto permission mode is active`），AskUserQuestion 工具将不可用。
+
+**处理方式**：
+- 用纯文本直接提问，代替 AskUserQuestion
+- 格式：`**Q1: 当前角色与维度？** A: PM 规划派发 / B: PM 长轮次编排 / C: 执行者`
+- 用户文本回复后继续 Q2、Q3
+- 禁止调用 ExitPlanMode——它与 auto permission 无关
 
 ### 第一轮：Q1 — 角色与维度
 
-用 AskUserQuestion 工具询问。一次一个问题。选项：
+非 auto 模式用 AskUserQuestion，auto 模式用纯文本提问。选项：
 - **A: PM 统筹 — 规划派发与验收** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-planning.md`
 - **B: PM 统筹 — 长轮次编排验收修复** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-orchestration.md`
 - **C: 执行者** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-execute.md`
