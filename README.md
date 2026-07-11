@@ -526,7 +526,7 @@ npm start
 
 | 日期 | 版本 | 变更 |
 |------|:--:|------|
-| 2026-07-11 | v2.8 | Skill 拆分加载（SKILL 222→64行 + 3 个按维度 guide，token 省 65-94%）；poll-command 离线检测；全文档重构（TOC/Skill说明/FAQ/离线处理/环境变量/贡献指南） |
+| 2026-07-11 | v2.8 | Skill 拆分加载 + xmind-orchestrated（task session 隔离困境分析）+ 注入格式修正 + poll-command 离线检测 + 全文档重构 |
 | 2026-07-09 | v2.7 | 新增 `session-retire` skill：退役→接班自动化 pipeline；PM Dashboard 迁移至浏览器扩展 |
 | 2026-07-08 | v2.6 | 记忆注入策略升级：全量预载 → 索引+按需自读（三级格式）；注入文本 ~600B→~200B |
 | 2026-07-08 | v2.5 | 三层共享内存系统：MemoryStore + 6 个 memory_* MCP 工具 + 自动注入 |
