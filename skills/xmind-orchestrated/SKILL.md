@@ -1,6 +1,6 @@
 ---
 name: xmind-orchestrated
-description: 思维导图——遇到复杂问题、架构死胡同、同一 bug 反复无进展时使用。通过 task session（主路径）或子 Agent（降级）获得独立上下文分析，打破思维惯性。用户说"思维导图"/"mind map"/"xmind"时触发。
+description: 第二视角——遇到复杂问题、架构死胡同、同一 bug 反复无进展时使用。通过 task session（主路径）或子 Agent（降级）获得独立上下文分析，打破思维惯性。用户说"第二视角"/"xmind"时触发。
 ---
 
 # XMIND Orchestrated — 困境分析 + 独立上下文求解
