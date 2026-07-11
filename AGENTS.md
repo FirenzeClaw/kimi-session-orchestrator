@@ -1,6 +1,6 @@
 <!--
 修改记录:
-  2026-07-11 | kimi-code (v2.8) | 修复注入文本歧义：memory_get("ns") → memory_get(namespace="ns")；全文档语法修正 + 过时引用清理（workflow-console.html）；README 重构：TOC + 环境变量表 + FAQ + 贡献指南 + 可见版本历史 + Linux 去重 + "更新工具"章节；Skill 安装 +rm -rf 防嵌套；execute-workflow.ts 移除 workflow-console 引用
+  2026-07-11 | kimi-code (v2.8) | Skill 拆分加载架构：SKILL.md 222→64行（auto检测+铁律+约束+三问）；新增 guide-planning/guide-orchestration/guide-execute 按维度加载；coordinator-guide 不再自动加载；token 节省 65-94%；poll-command 新增三层离线防御；全文档过时清理 + README 重构
   2026-07-10 | kimi-code (fix) | Wire Client 连接鲁棒性 3 项修复：① 新增 detectKimiServerUrl() 从 ~/.kimi-code/server/lock 自动检测 Kimi Server 端口（解决 KIMI_SERVER_URL 未设时默认 5494 与实际端口不匹配的问题）；② WebSocket 重连加指数退避（3s→60s，最多 10 次）+ clearTimeout 防泄漏（解决无限制重连堆积 100+ TCP 连接耗尽系统资源导致 fetch 失败的问题）；③ connect() 错误日志加 baseUrl 诊断 + wire-transport fetch 错误含 cause 详情；④ index.ts/poll-command/execute-workflow 硬编码端口全部变量化；⑤ 项目命名全局统一：kimi-debug-tunnel → kimi-session-orchestrator（mcp.json + docs/ + specs/）；selftest 通过（编译零错误，测试结果 wireConnected=true，create_session 成功）
   2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline；skills/ 库 3→4；AGENTS.md/README/coordinator-guide 同步更新
   2026-07-08 | kimi-code (fix) | Ubuntu 部署修复 3 项：① WireClient connect() 3×2s→6级指数退避（1s→32s，最长~63s）+ connecting 并发防护；② 启动失败后调用 startHealthCheck() 持续每10s重连（解决启动时序问题）；③ WorkflowEngine +setMemoryStore，run_flow/execute_workflow 传递 memory_level/from_session（修复 2 个 TODO）；selftest通过（编译零错误，Windows 兼容无回归）
@@ -241,7 +241,7 @@ for m in data.get('items',[]):
 | 文档 | 用途 |
 |------|------|
 | `API.md` | Kimi Server REST API 完整参考（51 端点） |
-| `docs/coordinator-guide.md` | **统筹 Session 准入规范（PM视角 v2.3）**——角色定位、工作分解、注意力管理、Skill调度、越权控制、红线 |
+| `docs/coordinator-guide.md` | **统筹 Session 准入规范（PM视角 v2.8）**——角色定位、工作分解、注意力管理、Skill调度、越权控制、红线 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎——已实施 |
 | `specs/002-session-memory-share/` | [DONE] Session 冷启动记忆共享——三层内存架构（MemoryStore + 6 MCP 工具 + 自动注入） |
 | `specs/003-permission-policy/` | [DONE] 权限与策略管理——read-only/safe-edit/full-access + 自定义YAML策略 |
@@ -257,7 +257,7 @@ for m in data.get('items',[]):
 
 | Skill | 用途 | 文件 | 安装位置 |
 |-------|------|------|---------|
-| `kimi-session-orchestrator` | MCP 工具完整使用规范——即发即返、后台轮询、工具速查、红线规则 | `skills/kimi-session-orchestrator/SKILL.md` | `~/.agents/skills/` |
+| `kimi-session-orchestrator` | MCP 工具完整使用规范——按角色维度（规划派发/长轮次编排/执行者）加载对应指南。启动时 auto 检测 + 三问，按需 Read 对应 guide 文档以节省 token | `skills/kimi-session-orchestrator/SKILL.md` | `~/.agents/skills/` |
 | `agent-session-monitor` | 通过 wire.jsonl 尾部日志推断 session 运行状态（无需 API 认证） | `skills/agent-session-monitor.md` | `~/.agents/skills/` |
 | `mcp-async-tool` | MCP 异步工具设计模式——解决 >30s 任务被协议超时截断的问题 | `skills/mcp-async-tool.md` | `~/.agents/skills/` |
 | `session-retire` | **PM 专用**——退役 task session + 自动化接班 pipeline：归档记忆 → 提取上下文 → 创建接班 session → 注入 7-block 模板 → 新 session 自举 | `skills/session-retire/SKILL.md` | `~/.kimi-code/skills/` |

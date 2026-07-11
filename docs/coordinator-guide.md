@@ -2,7 +2,7 @@
 
 <!--
 修改记录:
-  2026-07-11 | kimi-code (v2.8) | 修复注入文本歧义：memory_get("ns") → memory_get(namespace="ns")——消除与 memory MCP 服务器的工具名混淆；所有文档示例语法同步修正
+  2026-07-11 | kimi-code (v2.8) | Skill 拆分加载：SKILL.md 222→64行，新增 guide-planning/orchestration/execute 按维度加载，token 节省 65-94%；coordinator-guide 从 skill 中移出，保留为完整参考；§3.6 离线处理；§4.1 质量门新增 MCP 依赖检查；注入文本歧义修复
   2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline（Phase 1→5）；§1.5.4 引用该 skill 作为推荐方案；skills/ 库增至 4 个
   2026-07-08 | kimi-code (v2.6) | 记忆注入策略升级：§1.4 注入格式从全量预载改为索引+按需自读（minimal/standard/full 三级）；角色锚定"你是任务 session"；注入级别表更新；过期条目静默排除；§七 新增 v2.6 版本条目
   2026-07-08 | kimi-code (v2.5) | 共享内存冷启动集成：§1.1 侦察成果复用；§1.4 prompt 注入简化；§1.5.7 三层内存架构 + PM 操作流程；§1.5.4 退役增加 memory_archive 步骤；§二 新增 §2.5 共享内存工具准入矩阵；§七 新增 v2.5 版本条目
@@ -698,6 +698,30 @@ memory_status  # 查看知识库全景——条目数、过期数、命名空间
 ⑤ 以结构化格式输出（表格 + 分类 + 严重度标注）
 ```
 
+### 3.6 离线处理与恢复
+
+> **Tunnel 内置四层自动恢复机制，PM 无需手动干预。以下为 PM 视角的判断依据。**
+
+Tunnel WireClient 的防御层次：
+
+| 层 | 机制 | 参数 |
+|----|------|------|
+| L1 心跳探测 | 每 10s ping `/api/v1/meta` | 连续 3 次失败 → `connected=false` |
+| L2 REST 重连 | 指数退避重试 | 1s → 2s → 4s → 8s → 16s → 32s（6 次），之后每 10s 持续 |
+| L3 WS 重连 | 独立退避 | 3s → 6s → 12s → ... → 60s（10 次），耗尽降级 REST 轮询 |
+| L4 启动恢复 | 初始 connect() 失败后调用 `startHealthCheck()` | 持续每 10s 重连，直到成功 |
+
+**PM 的判断准则**：
+
+| 场景 | 表现 | PM 做法 |
+|------|------|----------|
+| Kimi Server 短时中断（< 30s） | `get_tunnel_status` 返回 `wireConnected: false`，几分钟后自动恢复 | 等待即可，已提交的 task session 不受影响 |
+| Tunnel 启动时 Kimi Server 未就绪 | MCP 工具超时报错，但 stdio 正常 | 启动 Kimi Server 后等待 Tunnel 自动重连（≤ 10s），或重启 Tunnel |
+| 长时间离线（> 5min） | `get_tunnel_status` 持续 `false` | 检查 Kimi Server 是否运行 + Token 是否有效；修复后 Tunnel 会自动恢复 |
+| 正在运行的 task session | prompt 已提交到 Kimi Server 端，离线期间继续执行 | Tunnel 恢复后通过 `list_io_records` / `poll_session` 获取结果 |
+
+**红线**：不要在 `wireConnected: false` 时反复调用 MCP 工具——每次都会超时 30s。等待恢复或排查根因。
+
 ---
 
 ## 五、质量门
@@ -705,6 +729,8 @@ memory_status  # 查看知识库全景——条目数、过期数、命名空间
 ### 4.1 任务启动前
 
 - [ ] 已读相关规范文件（AGENTS.md / spec / data-model）
+- [ ] 确认 Kimi Server 运行中 + Token 有效（`get_tunnel_status` → `wireConnected: true`）
+- [ ] 确认 `~/.kimi-code/mcp.json` 含 `kimi-session-orchestrator`（task session 依赖此配置使用 memory_get 等工具）
 - [ ] 工作包边界清晰，无重叠或遗漏
 - [ ] 依赖关系已标注
 - [ ] 每个 prompt 含上下文 + 具体任务 + 产出期望 + 成功标准

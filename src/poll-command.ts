@@ -2,8 +2,14 @@
  * Generate a bash polling script that waits for a session to become idle,
  * then fetches and prints the assistant's response.
  *
- * Designed for `Bash(run_in_background=true)` — the OS process exits when idle,
- * and the runtime injects a `<notification>` into the coordinating session.
+ * Designed for `Bash(run_in_background=true)` — the OS process exits on completion,
+ * timeout, or server disconnection, and the runtime injects a `<notification>`
+ * into the coordinating session.
+ *
+ * Defenses:
+ *   - Max 3 consecutive curl failures → exit(2) "server unreachable"
+ *   - Max 300s total elapsed → exit(3) "timeout"
+ *   - Empty/malformed STATUS → counted as failure
  *
  * Auto-detects python3 vs python for cross-platform compatibility.
  */
@@ -14,47 +20,78 @@ export interface PollConfig {
   sessionId: string;
   baseUrl?: string;
   token?: string;
+  maxWaitSeconds?: number;   // total timeout, default 300
+  maxFailures?: number;       // consecutive curl failures to abort, default 3
 }
 
 export function generatePollCommand(config: PollConfig): string {
   const baseUrl = config.baseUrl || process.env.KIMI_SERVER_URL || detectKimiServerUrl();
   const token = config.token || process.env.KIMI_SERVER_TOKEN || "";
   const authHeader = token ? `-H "Authorization: Bearer ${token}"` : "";
-
-  const parseStatus = (
-    `PY=$(which python3 2>/dev/null || which python 2>/dev/null || echo python)\n` +
-    `$PY -c "import sys,json; d=json.load(sys.stdin).get('data',{}); print(d.get('status',''))"`
-  );
-
-  const parseMessages = (
-    `$PY -c "\n` +
-    `import sys,json\n` +
-    `data=json.load(sys.stdin).get('data',{})\n` +
-    `for m in data.get('items',[]):\n` +
-    `  for b in m.get('content',[]):\n` +
-    `    if b.get('type')=='text' and b.get('text'):\n` +
-    `      print(b['text']); break\n` +
-    `"`
-  );
+  const maxSeconds = config.maxWaitSeconds || 300;
+  const maxFails = config.maxFailures || 3;
 
   return [
     `SID="${config.sessionId}"`,
     `BASE="${baseUrl}"`,
+    `MAX_SEC=${maxSeconds}`,
+    `MAX_FAILS=${maxFails}`,
     `PY=$(which python3 2>/dev/null || which python 2>/dev/null || echo python)`,
-    `while true; do`,
-    `  STATUS=$(curl -s ${authHeader} "$BASE/api/v1/sessions/$SID/status" | $PY -c "import sys,json; d=json.load(sys.stdin).get('data',{}); print(d.get('status',''))")`,
-    `  if [ "$STATUS" = "idle" ] || [ "$STATUS" = "aborted" ]; then`,
-    `    echo "---RESULT---"`,
-    `    curl -s ${authHeader} "$BASE/api/v1/sessions/$SID/messages?page_size=5&role=assistant" | $PY -c "`,
+    `START_TS=$(date +%s)`,
+    `FAILS=0`,
+    ``,
+    // Helper: parse status from status API response
+    `parse_status() {`,
+    `  curl -s --max-time 10 ${authHeader} "$BASE/api/v1/sessions/$SID/status" 2>/dev/null | \\`,
+    `    $PY -c "import sys,json; d=json.load(sys.stdin).get('data',{}); print(d.get('status',''))" 2>/dev/null`,
+    `}`,
+    ``,
+    // Helper: fetch and print assistant text response
+    `fetch_result() {`,
+    `  curl -s --max-time 10 ${authHeader} "$BASE/api/v1/sessions/$SID/messages?page_size=5&role=assistant" 2>/dev/null | \\`,
+    `    $PY -c "`,
     `import sys,json`,
     `data=json.load(sys.stdin).get('data',{})`,
     `for m in data.get('items',[]):`,
     `  for b in m.get('content',[]):`,
     `    if b.get('type')=='text' and b.get('text'):`,
     `      print(b['text']); break`,
-    `"`,
-    `    break`,
+    `" 2>/dev/null`,
+    `}`,
+    ``,
+    `while true; do`,
+    `  NOW=$(date +%s)`,
+    `  ELAPSED=$((NOW - START_TS))`,
+    ``,
+    `  # Guard: total timeout`,
+    `  if [ $ELAPSED -ge $MAX_SEC ]; then`,
+    `    echo "[POLL_TIMEOUT] 等待 \${MAX_SEC}s 超时，session 可能卡住或 server 离线"`,
+    `    fetch_result`,
+    `    exit 3`,
     `  fi`,
+    ``,
+    `  STATUS=$(parse_status)`,
+    ``,
+    `  # Guard: server unreachable (empty STATUS after curl failure)`,
+    `  if [ -z "$STATUS" ]; then`,
+    `    FAILS=$((FAILS + 1))`,
+    `    if [ $FAILS -ge $MAX_FAILS ]; then`,
+    `      echo "[SERVER_OFFLINE] 连续 \${FAILS} 次请求失败，Kimi Server 可能已离线"`,
+    `      exit 2`,
+    `    fi`,
+    `    sleep 3`,
+    `    continue`,
+    `  fi`,
+    ``,
+    `  # Reset fail counter on successful request`,
+    `  FAILS=0`,
+    ``,
+    `  if [ "$STATUS" = "idle" ] || [ "$STATUS" = "aborted" ]; then`,
+    `    echo "---RESULT---"`,
+    `    fetch_result`,
+    `    exit 0`,
+    `  fi`,
+    ``,
     `  sleep 2`,
     `done`,
   ].join("\n");
