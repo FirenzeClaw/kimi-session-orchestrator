@@ -7,7 +7,7 @@ description: Use when retiring a task session and spawning a successor with full
 
 ## Overview
 
-将 coordinator-guide §1.5.4 的 7 步退役流程自动化：归档发现 → 提取上下文 → 写入共享记忆 → 创建接班 session → 注入完整上下文 → 新 session 自举。实现近乎无损的 session 接力。
+将 coordinator-guide §1.5.4 的 7 步退役流程自动化：环境就绪检查 → 归档发现 → 提取上下文 → 写入共享记忆 → 创建接班 session → 注入完整上下文 → 新 session 自举。实现近乎无损的 session 接力。
 
 ## When to Use
 
@@ -19,9 +19,23 @@ description: Use when retiring a task session and spawning a successor with full
 
 ## Pipeline
 
+### Phase 0 — 环境就绪检查（前置）
+
+在进入 Phase 1 之前，先调用一次 `memory_status` 检查共享内存是否已初始化。若返回错误"知识库未初始化"，则触发以下初始化流程：
+
+```
+⚠️ 共享内存未初始化。需创建 .kimi-tunnel/ 目录并 /reload。
+
+是否初始化？
+  → 是：mkdir -p <cwd>/.kimi-tunnel/ → 提示 PM 执行 /reload → 等待 reload 完成 → 重新进入 Phase 0
+  → 否：继续 Phase 1，所有 memory_* 操作静默跳过。交接内容仅通过 7-block 模板传递，不做持久化归档。
+```
+
+> **关键**：仅 `mkdir` 不足以初始化——MCP 服务进程需重启才能检测目录并自动创建 `memory.db`。创建目录后**必须 `/reload`**。memory_status 返回成功（含 entry_count 字段）即表示就绪。
+
 ### Phase 1 — 提取退役 session 上下文
 
-以下 4 步全部并行执行（互不依赖）：
+以下 4 步全部并行执行（互不依赖）。若 Phase 0 跳过了初始化，步骤④的 memory_get 调用可跳过（返回空，不影响后续流程）。
 
 ```
 ① get_session_info(session_id="<retiring_id>")
@@ -33,13 +47,13 @@ description: Use when retiring a task session and spawning a successor with full
 ③ read_session_log(session_id="<retiring_id>", limit=50)
    → 深度上下文：错误、工具调用链、阻塞点
 
-④ memory_get(namespace="project/meta")
+④ memory_get(namespace="project/meta")      ← 若 Phase 0 跳过则直接跳过
    memory_get(namespace="project/decisions")
    memory_get(namespace="project/learnings")
    → 项目知识基线（新 session 也需要这些）
 ```
 
-**完成标准**：拿到 cwd + 最近对话摘要 + 项目知识基线。4 个调用全部返回。
+**完成标准**：拿到 cwd + 最近对话摘要 + 项目知识基线（若可用）。4 个调用全部返回（含空）。
 
 ### Phase 2 — 归档与持久化
 
@@ -153,6 +167,7 @@ description: Use when retiring a task session and spawning a successor with full
 
 | 场景 | 处理 |
 |------|------|
+| **memory 未初始化** | Phase 0 检测 → 询问 PM 是否初始化。是：mkdir + `/reload`；否：跳过全部 memory_* 操作，交接仅靠 7-block 模板 |
 | project/meta 为空 | 注明"项目知识库未初始化，建议先 memory_set 录入项目规范" |
 | memory_archive 无数据可归档 | 跳过 Phase 2 步骤⑤，仅写入 handoff 数据 |
 | create_session 失败 | 检查 get_tunnel_status → 确认 cwd 存在 → 重试一次 → 仍失败则报告 |
@@ -164,6 +179,7 @@ description: Use when retiring a task session and spawning a successor with full
 
 | 错误 | 后果 | 正确做法 |
 |------|------|---------|
+| **memory 未初始化时静默降级** | 所有 memory_* 操作失败，handoff 数据丢失，退役信息仅存于 7-block 模板 | Phase 0 先检查 memory_status。若未初始化，**主动询问 PM** 是否初始化，不自行决定跳过 |
 | 忘记 `from_session` | 新 session 无法自动获取退役 session 的 handoff 上下文 | create_session 必须传 from_session |
 | 忘记 `memory_level="full"` | 新 session 只注入了索引，缺少完整的项目知识 | 接班场景始终用 full |
 | 7-block 模板缺区块 | 新 session 不知道规范文件、权限边界、已做决策 | 全部 7 个区块必须填写，不可留空 |
@@ -173,6 +189,7 @@ description: Use when retiring a task session and spawning a successor with full
 ## Red Lines
 
 - 退役前未执行 memory_archive → 丢失全部发现
+- **memory 未初始化时不做询问直接降级** → handoff 数据未持久化，信息仅靠一次性 prompt 传递
 - create_session 未传 from_session → 接班 session 盲飞
 - 新 session 首条 prompt 无启动自举指令 → session 不知道要读什么
 - 上下文建立前分派任务 → 冲动操作，产出不可靠
