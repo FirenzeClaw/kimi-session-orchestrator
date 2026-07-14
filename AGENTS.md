@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-14 | kimi-code (docs) | AGENTS.md 瘦身 22→14 KB + Bash 轮询示例修复（端口 lock 检测 + SID 赋值）
   2026-07-14 | kimi-code (fix) | Wire Client 过期 lock 自动清理：detectKimiServerUrl() PID 活性检测 + 自动删 lock；connect() 每次重连前重新检测 URL
   2026-07-12 | kimi-code (docs) | README 更新工具章节补全
   2026-07-11 | kimi-code (v2.8) | Skill 拆分加载 + xmind-orchestrated + 注入格式修正

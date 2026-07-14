@@ -530,6 +530,14 @@ PM 应在创建 task session 前确认以下 4 项（一次性配置）：
 </details>
 
 <details>
+<summary><b>MCP 启动时会自动唤起 Kimi Web Server 吗？</b></summary>
+
+**不会。** Orchestrator 是纯客户端，只连接到已运行的 Kimi Server。两者是独立进程，必须先单独启动 `kimi web --no-open`，再 `/reload` 或启动 Tunnel。
+
+Orchestrator 会通过 lock 文件自动检测 Kimi Server 端口；若 Server 未运行，Tunnel 每 10s 自动重试连接，但不会主动拉起 Server 进程。
+</details>
+
+<details>
 <summary><b>更新代码后 Skill 没有生效？</b></summary>
 
 仅 `git pull` + `npm run build` 不更新 skill 文件。Skill 是独立拷贝到用户目录的，需要手动重装：
