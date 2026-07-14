@@ -1,45 +1,13 @@
 <!--
-修改记录:
-  2026-07-14 | kimi-code (fix) | Wire Client 过期 lock 自动清理：① detectKimiServerUrl() 新增 isProcessAlive() PID 活性检测——lock PID 已死则自动删 lock + 打印诊断（含 PID/启动时间/修复命令）+ 回退默认端口；② connect() 每次重连前重新检测 URL（detectKimiServerUrl）——解决自动清理后 Tunnel 无法感知新端口的问题；selftest通过（编译零错误）
-  2026-07-12 | kimi-code (docs) | README"更新工具"章节补全：新增"更新前检查"（kimi web 运行状态 + token 校验）+ 孤儿进程清理说明；本机实测确认 kimi web 未运行是 `/reload` 后 ECONNREFUSED 最常见根因
-  2026-07-11 | kimi-code (v2.8) | Skill 拆分加载 + xmind-orchestrated + 注入格式全面修正：SKILL.md 222→64行；新增 3 个 guide 按维度加载 + xmind-orchestrated（task session 隔离困境分析）+ xmind 内化；session-retire 注入修正；coordinator-guide 保留 docs/；token 节省 65-94%；poll-command 三层离线防御
-  2026-07-10 | kimi-code (fix) | Wire Client 连接鲁棒性 3 项修复：① 新增 detectKimiServerUrl() 从 ~/.kimi-code/server/lock 自动检测 Kimi Server 端口（解决 KIMI_SERVER_URL 未设时默认 5494 与实际端口不匹配的问题）；② WebSocket 重连加指数退避（3s→60s，最多 10 次）+ clearTimeout 防泄漏（解决无限制重连堆积 100+ TCP 连接耗尽系统资源导致 fetch 失败的问题）；③ connect() 错误日志加 baseUrl 诊断 + wire-transport fetch 错误含 cause 详情；④ index.ts/poll-command/execute-workflow 硬编码端口全部变量化；⑤ 项目命名全局统一：kimi-debug-tunnel → kimi-session-orchestrator（mcp.json + docs/ + specs/）；selftest 通过（编译零错误，测试结果 wireConnected=true，create_session 成功）
-  2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline；skills/ 库 3→4；AGENTS.md/README/coordinator-guide 同步更新
-  2026-07-08 | kimi-code (fix) | Ubuntu 部署修复 3 项：① WireClient connect() 3×2s→6级指数退避（1s→32s，最长~63s）+ connecting 并发防护；② 启动失败后调用 startHealthCheck() 持续每10s重连（解决启动时序问题）；③ WorkflowEngine +setMemoryStore，run_flow/execute_workflow 传递 memory_level/from_session（修复 2 个 TODO）；selftest通过（编译零错误，Windows 兼容无回归）
-  2026-07-08 | kimi-code (feature) | 实施 specs/004-memory-lazy-inject：buildInjection() 从全量预载改为索引+按需自读（minimal/standard/full 三级格式）；注入文本 ~600B→~200B（标准级）；角色锚定"你是任务 session"；>20条自动折叠；selftest通过（109B/194B/332B/68B/390B）
-  2026-07-08 | kimi-code (fix) | 记忆系统 2 个缺陷修复：① 启动时主动 ensureDb() 解决管理工具未初始化问题；② TunnelServices +tunnelProjectRoot 解决跨项目注入静默失效——注入不再依赖 session cwd，始终使用 tunnel 自身 memory.db；selftest + 极限测试通过（2字prompt纯记忆应答、空目录零文件对照）
-  2026-07-08 | kimi-code (feature) | 实施 specs/002-session-memory-share v1.0：三层共享内存系统——MemoryStore（node:sqlite）+ 6个MCP工具（memory_set/get/list/delete/status/archive）+ 自动注入（create_session/execute_prompt）；冷启动token节省83%+；工具总数 22→28；selftest通过
-  2026-07-07 | kimi-code (feature) | 实施 specs/003-permission-policy v1.0：三层权限系统——策略引擎（policy-engine）+ 工具级拦截（WireClient approveAll）+ 3内置策略（read-only/safe-edit/full-access）+ 自定义YAML策略 + 3新MCP工具（list_policies/approve_tool/deny_tool）+ 5工具policy参数增强 + PM Dashboard阻断事件面板；工具总数 19→22；selftest通过
-  2026-07-07 | kimi-code (spec) | 新增 specs/003-permission-policy：三层权限架构（Session级+任务级策略+工具级拦截）——对标 Codex/AGT
-  2026-07-07 | kimi-code (spec) | 新增 specs/002-session-memory-share：三层共享内存（L1项目知识库+L2 Session上下文+L3学习沉淀）——冷启动上下文节省83%+
-  2026-07-07 | kimi-code (research) | 竞品分析：kimi-mcp-server/agent-orchestration/agent-pool-mcp；内存共享系统调研；权限管理系统调研
-  2026-07-07 | kimi-code (feat) | PM Dashboard 重写（workflow-console.html→四区监管面板）；console.html v2→v2.3 设计升级
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 退役流程增加 learn 步骤 + PM 自身技能表补充 learn；核心原则框第三条：可复用方案=组织资产
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增 §三 Skill 调度指南——39个skill按PM场景分类；PM自身技能与任务技能明确分离
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 退役交接：步骤⑤⑥升级为7区块上下文交接模板（含强制基线阅读+等待确认协议）；PM红线+反模式表追加上下文交接条目
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增越权与冲动控制（§1.5.6）——注意力漂移早期信号；衰减信号表+2行；PM红线14条
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 注意力管理融入本机实测：360K上下文拐点、衰减信号典型触发点、退役速查量化阈值、上下文估算代理指标
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 新增 §1.5 上下文效率与注意力管理：Token经济编排、审查-修复分离、衰减检测、退役流程、规范偏离纠正
-  2026-07-07 | kimi-code (docs) | coordinator-guide.md 升级为项目经理视角：新增 §零 角色定位、工作分解规范、PM决策框架、质量门；v2.2
-  2026-07-07 | kimi-code (docs) | 新增 docs/coordinator-guide.md：统筹 Session 准入规范——工具准入矩阵、运行规范、错误处理、红线、内容安全
-  2026-07-07 | kimi-code (fix) | sanitizeText 反斜杠预加固：\\xNN/\\uNNNN 序列双反斜杠硬化 + 负向前瞻幂等保证，防御下游 kimi-code JSON 序列化器漏转义导致的 Provider hex escape parse 错误
-  2026-07-07 | kimi-code (fix) | session-log-reader 防御性增强：新增 sanitizeText() 清洗 lone surrogates + 控制字符；listIORecords/readSessionLog 增加 maxContentLength 参数（默认 2000/500）；list_io_records/read_session_log 工具暴露 max_content_length 参数；移除工具层二次截断
-  2026-07-06 | kimi-code (robustness) | WireClient 新增心跳探测+自动重连：每10s ping /api/v1/meta，连续3次失败→connected=false→auto connect()；解决 kimi web 静默崩溃后 connected 标志永久过期问题
-  2026-07-06 | kimi-code (arch) | 确定后台监听最佳方案：Bash REST 轮询（OS进程信号驱动，零开销），set_watch_output 降为备选；修复 WS 直接帧处理、ESM require 兼容
-  2026-07-06 | kimi-code (feature) | 新增 watch_session/get_watch_result/continue_watch/set_watch_output 4工具：WS 后台监听 + 自动化循环 + 文件输出
-  2026-07-06 | kimi-code (architecture) | 架构深化 8/8 项：删除 session-manager+flowOrchestrator、message-queue简化为pub/sub、WireClientFactory DI、run_flow统一到WorkflowEngine、WS推送状态缓存、poll_session WS快路径
-  2026-07-06 | kimi-code (bugfix) | selftest 修复：WireClient.connect 缺失、activeExecutions 泄漏、model/thinking 参数被忽略、escapeYaml 转义不完整
-  2026-07-06 | kimi-code (feature) | 新增自适应工作流引擎：learn_workflow/execute_workflow/list_templates/continue_workflow 4个工具 + 模板存储 + Web 监管页面
-  2026-07-06 | kimi-code (bugfix) | 修复 run_flow /auto 注入：不设 session 级 permission_mode，改用 REST API autoApprove；submitPrompt 新增 autoApprove 重试机制
-  2026-07-06 | kimi-code (bugfix) | 修复 chat_with_session/run_flow/execute_prompt MCP 超时：移除阻塞 wait 路径，统一即发即返 + 自动重连
-  2026-07-06 | kimi-code (architecture) | 架构深化（6/6 项）：① 消除 9 文件 584 行死代码 ② 拆分 session-manager 为 store+reader（576→72 行） ③ 消除 3 个单例为 DI（wireClient/messageQueue/startTime） ④ WireClient 拆分跳过（收益边际） ⑤ 激活 TunnelServices DI ⑥ 统一路由/WS 模式（保持内联）
-  2026-07-06 | kimi-code (feature) | 新增 poll_session 工具：结构化轮询 session 运行状态，替代后台 bash 监控
-  2026-07-06 | kimi-code (feature) | 新增 create_session 工具：通过 REST API 创建新 session，支持权限模式 auto/manual/yolo
-  2026-07-06 | kimi-code (feature) | execute_prompt / chat_with_session 新增 wait 参数（默认 false）：即发即返不阻塞；新增 submitPrompt 快通道
-  2026-07-06 | kimi-code (feature) | execute_prompt / chat_with_session 新增 auto_mode 参数：自动通过 API 审批所有工具调用
-  2026-07-06 | kimi-code (polish) | 工具质量提升：readSessionLog 分页修复、tool_call 截断、get_session_info 含 wirePath、超时诊断提示
-  2026-07-06 | kimi-code (feature) | 新增 list_io_records 工具
-  2026-07-06 | kimi-code (bugfix) | 修复 EADDRINUSE 多 session 冲突
+修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-14 | kimi-code (fix) | Wire Client 过期 lock 自动清理：detectKimiServerUrl() PID 活性检测 + 自动删 lock；connect() 每次重连前重新检测 URL
+  2026-07-12 | kimi-code (docs) | README 更新工具章节补全
+  2026-07-11 | kimi-code (v2.8) | Skill 拆分加载 + xmind-orchestrated + 注入格式修正
+  2026-07-10 | kimi-code (fix) | Wire Client 连接鲁棒性 5 项修复 + 项目命名统一
+  2026-07-09 | kimi-code (v2.7) | session-retire skill + skills/ 3→4
+  2026-07-08 | kimi-code | 记忆注入懒加载 + 跨项目注入修复 + 共享内存系统
+  2026-07-07 | kimi-code | 权限策略系统 + coordinator-guide 升级 PM 视角 + spec 文档
+  2026-07-06 | kimi-code | 自适应工作流引擎 + 即发即返 + WS 状态缓存 + 架构深化
   2026-07-05 | kimi-code (project-init) | 初始生成
 -->
 
@@ -171,30 +139,27 @@ npm run inspector    # MCP Inspector 调试模式
 ### 推荐：Bash 后台 REST 轮询（零 token 等待）
 
 ```
-① create_session(cwd, permission_mode="auto")
-② execute_prompt(session_id, task, auto_mode=true)
-   → { submitted: true }
+① create_session(cwd, permission_mode="auto")     → 获得 sessionId
+② execute_prompt(sessionId, task, auto_mode=true) → { submitted: true }
 
-③ Bash(run_in_background=true):
+③ Bash(run_in_background=true):   # 端口从 lock 文件自动获取
+   PORT=$(node -e "console.log(JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.kimi-code/server/lock','utf8')).port)")
    PY=$(which python3 2>/dev/null || which python 2>/dev/null || echo python)
+   SID="<sessionId>"
    while true; do
      STATUS=$(curl -s -H "Authorization: Bearer $KIMI_SERVER_TOKEN" \
-       "http://127.0.0.1:5494/api/v1/sessions/$SID/status" | \
+       "http://127.0.0.1:$PORT/api/v1/sessions/$SID/status" | \
        $PY -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('status',''))")
-     if [ "$STATUS" = "idle" ] || [ "$STATUS" = "aborted" ]; then
-       curl -s -H "Authorization: Bearer $KIMI_SERVER_TOKEN" \
-         "http://127.0.0.1:5494/api/v1/sessions/$SID/messages?page_size=5&role=assistant" | \
-         $PY -c "
-import sys,json
-data=json.load(sys.stdin)['data']
-for m in data.get('items',[]):
-  for b in m.get('content',[]):
-    if b.get('type')=='text': print(b['text']); break
-"
-       break
-     fi
+     if [ "$STATUS" = "idle" ] || [ "$STATUS" = "aborted" ]; then break; fi
      sleep 2
    done
+   curl -s -H "Authorization: Bearer $KIMI_SERVER_TOKEN" \
+     "http://127.0.0.1:$PORT/api/v1/sessions/$SID/messages?page_size=5&role=assistant" | \
+     $PY -c "import sys,json
+data=json.load(sys.stdin).get('data',{})
+for m in data.get('items',[]):
+  for b in m.get('content',[]):
+    if b.get('type')=='text': print(b['text']); break"
 
 ④ 统筹 session 继续交互（不阻塞）
 ⑤ 后台进程完成 → 自动通知 → 读取输出拿到回复
