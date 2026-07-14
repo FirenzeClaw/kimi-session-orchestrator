@@ -403,7 +403,7 @@ PM 操作:                            Task session 首 turn:
 
 ## 权限策略系统（v2.4+）
 
-- **三层架构**：Session 级策略（create_session policy 参数） + 任务级策略（execute_prompt policy 参数） + 工具级拦截（WireClient approveAll）
+- **三层架构**：Session 级策略（create_session permission_mode）+ 任务级策略（policy 参数）+ 工具级回调（Bash 检测 awaiting_approval → PM 手动 approve_tool / deny_tool）。已移除 approveAll 自动裁决，改为 PM 决策闭环。
 - **3 内置策略**：`read-only`（只读）/ `safe-edit`（安全编辑，禁 shell 命令）/ `full-access`（全部允许）
 - **自定义 YAML**：`.kimi-tunnel/policies/<name>.yaml`
 - **PM Dashboard**：实时阻断事件面板，支持 approve/deny（once/session scope）

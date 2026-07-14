@@ -2,7 +2,7 @@
 
 **Feature**: `003-permission-policy`
 **Created**: 2026-07-07
-**Status**: Draft
+**Status**: Done (v2.8 — approveAll 移除，Bash→PM 手动决策闭环)
 **Parent**: kimi-session-orchestrator v2.4
 
 ---
@@ -41,9 +41,10 @@
 │ policy: "read-only" / "safe-edit" / 自定义 YAML   │
 │ 决定单次任务允许的工具类别和操作范围                 │
 ├─────────────────────────────────────────────────┤
-│ L3: 工具级拦截（新增）                            │
-│ 策略引擎在每次工具调用前执行判定                    │
-│ allow → 放行 / deny → 阻断 / require_approval → 审批 │
+│ L3: 工具级回调（v2.8 升级）                        │
+│ Bash 后台轮询检测 awaiting_approval                   │
+│ → 通知 PM → PM 手动 approve_tool / deny_tool          │
+│ auto session 零审批（submitPrompt 自动 permission_mode）│
 └─────────────────────────────────────────────────┘
 ```
 

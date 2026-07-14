@@ -11,22 +11,21 @@
 
 - Kimi Server 通过 WebSocket 推送 session 状态变更事件（`event.session.status_changed`）
 - 当 session 因工具调用需要审批时，状态变为 `awaiting_approval`
-- kimi-session-orchestrator 已有 `wire-client.ts:approveAll()` 方法，通过 `POST /api/v1/sessions/{id}/approvals/{approval_id}` 自动审批
+- kimi-session-orchestrator 通过 `POST /api/v1/sessions/{id}/approvals/{approval_id}` 实现审批交互
 
-### 决策：在 `awaiting_approval` 事件处理中插入策略检查
+### 决策：在 `awaiting_approval` 事件中由 PM 手动决策
 
-**Rationale**: 这是唯一能感知 task session 工具调用的点。tunnel 不直接控制 kimi-code 的内置工具（Read/Write/Bash 等），但可以通过 Kimi Server 的审批 API 拒绝被禁工具的调用。
+**Rationale**: 这是唯一能感知 task session 工具调用的点。tunnel 不直接控制 kimi-code 的内置工具（Read/Write/Bash 等），但可以通过 Kimi Server 的审批 API 放行或拒绝工具调用。审批决策权完全归 PM——不再有自动裁决引擎。
 
-**具体拦截流程**：
+**具体审批流程（v2.8+）**：
 ```
 WS event: awaiting_approval
-  → fetch pending approvals: GET /api/v1/sessions/{id}/approvals?status=pending
-  → for each approval:
-      → extract tool_name from approval payload
-      → check against active policy
-      → allow → POST approve with decision=approved
-      → deny  → POST approve with decision=denied
-      → require_approval → emit WS event to PM Dashboard (leave pending)
+  → Bash 后台轮询检测 status=awaiting_approval
+  → 通知 PM：查看 pending approvals
+  → PM 审查后手动决策：
+      → approve_tool(approval_id, scope="session")  → POST approve + 解绑 policy
+      → deny_tool(approval_id)                      → POST reject
+  → auto session 零审批：submitPrompt 自动发 permission_mode: auto
 ```
 
 **Alternatives considered**:
@@ -38,7 +37,7 @@ WS event: awaiting_approval
 
 ## 2. Kimi Server 审批 API 验证
 
-### 决策：复用现有 `approveAll()` 模式，增加 policy 过滤
+### 决策：Bash 回调 + PM 手动决策替代 `approveAll()` 自动裁决
 
 **API 端点确认**（来自 `wire-client.ts` 已有实现）：
 - `GET /api/v1/sessions/{id}/approvals?status=pending` → 返回 `{ items: [{ approval_id, tool_name?, ... }] }`
@@ -137,17 +136,18 @@ interface IPolicyEngine {
 
 ## 6. PM Dashboard 集成
 
-### 决策：通过现有 WS 通道推送阻断事件
+### 决策：Bash 回调通知 → PM 手动决策（不依赖 WS 推送）
 
-**流程**：
-1. 策略引擎 `check()` 返回 `deny` 后，发送审批拒绝到 Kimi Server
-2. 同时通过 `messageQueue` 广播 `policy_block` 事件
-3. `workflow-console.html` (PM Dashboard) 的 WS 客户端接收并在注意力预警面板展示
+**流程（v2.8+）**：
+1. Session 进入 `awaiting_approval` 状态
+2. Bash 后台轮询检测到状态变更（或 poll_session 查询）
+3. PM 审查 pending approvals → 手动调用 `approve_tool(approval_id)` 或 `deny_tool(approval_id)`
+4. auto session 零审批——`submitPrompt` 自动发送 `permission_mode: auto`
 
 **Rationale**:
-- 复用现有 `messageQueue` pub/sub 基础设施（67 行，极简）
-- 不新增 WebSocket 端点
-- Dashboard 已在 `workflow-console.html` 存在，只需添加新事件类型处理
+- 决策权完全归 PM，不再有自动裁决引擎
+- Bash 回调机制基于操作系统进程退出信号，零 token 开销
+- 策略引擎的 `check()` 方法保留用于策略验证，但不再在审批流中自动调用
 
 ---
 

@@ -1,6 +1,7 @@
 # 策略阻断 → PM 审批闭环 — 设计文档
 
 > 2026-07-14 | 基于现有代码 `src/policy-engine.ts` `src/wire-client.ts` `src/tools/approve-tool.ts` `src/session-watcher.ts`
+> **⚠️ 架构已升级（2026-07-14 v2.8）**: `approveAll()` 自动裁决引擎已移除，改为 Bash 后台轮询 + PM 手动决策。本文档描述原始设计，仅供参考历史上下文。当前实现见 `AGENTS.md §审批工作流`。
 
 ---
 

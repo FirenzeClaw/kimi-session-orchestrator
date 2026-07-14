@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-14 | kimi-code (arch) | 移除 approveAll 自动审批引擎：manual session 审批→Bash回调→PM手动决策；auto session 继承 permission_mode 零审批；deny_tool 重写支持 approval_id；approve_tool scope=session 修复
   2026-07-14 | kimi-code (fix) | poll_command fetch_result 彻底修复：curl 管道截断 → Python urllib 直连 HTTP；移除 2>/dev/null 静默吞错；Windows GBK emoji 乱码 → PYTHONIOENCODING=utf-8
   2026-07-14 | kimi-code (docs) | 背景轮询 fetch_result 脚本陷阱：bash 双引号 \n 不展开 + Python -c 语法错误 + 2>/dev/null 静默吞错 → 始终用 poll_command 自动生成版
   2026-07-14 | kimi-code (docs) | AGENTS.md 瘦身 22→14 KB + Bash 轮询示例修复（端口 lock 检测 + SID 赋值）
@@ -203,10 +204,40 @@ for m in data.get('items',[]):
 |-------|------|------|
 | `active` | 正常执行工具调用 | 继续轮询 |
 | `swarm` | 并行子代理调度中 | 继续轮询 |
-| `awaiting_approval` | 等待人工审批 | 检查 auto_mode |
+| `awaiting_approval` | 等待 PM 审批 | Bash 检测→PM 手动 approve_tool/deny_tool |
 | `done` | turn 完成 (end_turn) | 工作流结束 |
 | `error` | 检测到错误 | 查看 log |
 | `idle` | 空闲等待中 | 可能卡住 |
+
+### 审批工作流（manual session + policy）
+
+manual session 的工具调用由 PM 手动决策，流程：
+
+```
+① create_session(permission_mode="manual", policy="read-only")
+② execute_prompt(sessionId, task)              → { submitted: true }
+
+③ Bash(run_in_background=true):  # 监听审批事件
+   while true; do
+     STATUS=$(curl .../status | parse)
+     if [ "$STATUS" = "awaiting_approval" ]; then
+       curl .../approvals?status=pending | jq  # 查看待审批工具
+       # → 通知 PM：tool=X, action=Y
+       exit 0
+     fi
+     if [ "$STATUS" = "idle" ] || [ "$STATUS" = "aborted" ]; then exit 0; fi
+     sleep 2
+   done
+
+④ PM 审查审批详情（工具名 + 操作描述），手动决策：
+   approve_tool(approval_id, scope="session")  → 放行 + 解绑 policy
+   deny_tool(approval_id)                      → 拒绝
+
+⑤ auto session 零审批，无需此流程：
+   create_session(permission_mode="auto")  → submitPrompt 自动继承
+```
+
+> **架构升级** `approveAll`：原自动裁决引擎（deny/allow/require_approval）替换为真正的三层架构第三层——Bash 回调通知 → PM 手动调用 `approve_tool` / `deny_tool`。决策权归 PM，流程自动化。
 
 ## 参考文档
 

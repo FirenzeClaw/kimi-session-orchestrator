@@ -83,12 +83,12 @@
 
 **Goal**: PM Dashboard 实时展示策略阻断事件，PM 可通过 `approve_tool`/`deny_tool` 手动干预；阻断事件 3 秒内出现在 Dashboard。
 
-**Independent Test**: 创建 read-only session → 触发 Bash 阻断 → 打开 `workflow-console.html` → 3 秒内看到阻断事件卡片 → 点击 "放行" → session 收到工具放行。
+**Independent Test（v2.8 更新）**: 创建 read-only session → 触发 Bash 阻断 → Bash 后台轮询检测 awaiting_approval → PM 调用 approve_tool(approval_id) → session 收到工具放行。
 
-- [X] T019 [P] [US4] Create `src/tools/approve-tool.ts` — register `approve_tool` MCP tool: accepts `block_id` and `scope` ("once"|"session"); for scope="once", POST approval with `decision: "approved"`; for scope="session", add tool to session's whitelist (temporary override) then approve
-- [X] T020 [P] [US4] Create `src/tools/deny-tool.ts` — register `deny_tool` MCP tool: accepts `block_id`; POST approval with `decision: "denied"`; mark BlockEvent as resolved
-- [X] T021 [US4] Update `src/wire-client.ts` — when policy returns `deny` or `require_approval`: create `BlockEvent` record (stored in Map in policy-engine); broadcast `{ type: "policy.block", payload: BlockEvent }` via `messageQueue.broadcast()`; when `require_approval`, also broadcast `{ type: "policy.require_approval" }`
-- [X] T022 [US4] Update `src/public/workflow-console.html` — add WS message handlers for `policy.block` and `policy.require_approval`; add a "策略阻断" panel section: table columns (时间, Session, 工具, 策略规则, 原因, 操作 buttons 放行一次/放行session/拒绝); add "策略状态" column to existing session table showing active policy name; auto-scroll to latest block event
+- [X] T019 [P] [US4] Create `src/tools/approve-tool.ts` — register `approve_tool` MCP tool: accepts `block_id` (optional), `scope` (Kimi Server 仅支持 `"session"`), `session_id` (optional), `approval_id` (optional); scope=session 时解绑 session 策略；API 失败返回 isError 而非静默吞错
+- [X] T020 [P] [US4] Create `src/tools/deny-tool.ts` — register `deny_tool` MCP tool: accepts `block_id` (optional), `session_id` (optional), `approval_id` (optional); 当提供 approval_id 时直接 POST Kimi Server 拒绝；API 失败返回 isError
+- [X] ~~T021 [US4] Update `src/wire-client.ts` — auto-broadcast policy.block events~~ **v2.8 废弃**: approveAll 已移除，WS 自动推送阻断事件不再需要。审批改为 Bash 回调 + PM 手动决策。BlockEvent 记录保留在 policy-engine 中供 approve_tool/deny_tool 查询。
+- [X] ~~T022 [US4] Update `src/public/workflow-console.html`~~ **v2.8 废弃**: WS 推送 `policy.block` 事件随 approveAll 移除。PM 改为 Bash 后台轮询 + `approve_tool`/`deny_tool` 手动决策，不再依赖 Dashboard UI。
 - [X] T023 [US4] Update `src/mcp-server.ts` — import and register `registerApproveTool`, `registerDenyTool`
 
 ---
@@ -98,8 +98,8 @@
 **Goal**: 边界处理、日志完整性、端到端验证。
 
 - [X] T024 [P] Error handling pass — `src/tools/list-policies.ts`: return graceful error if `.kimi-tunnel/policies/` doesn't exist (empty list, no crash); `src/policy-store.ts`: return `{ valid: false, error: "line N: ..." }` for malformed YAML; `src/wire-client.ts`: handle approval API failure with retry (2 attempts, log warning on final fail)
-- [X] T025 [P] Add policy block logging — `src/wire-client.ts`: on each block event, append structured log entry to session's wire.jsonl via `appendFileSync` (format: `{"type":"policy.block","sessionId":"...","toolName":"...","policy":"...","rule":"...","timestamp":"..."}`)
-- [X] T026 Run end-to-end smoke test — create read-only session → trigger blocked write → verify denial in log → verify dashboard shows event → approve via `approve_tool` → verify tool now allowed; additionally verify FR-1.3: create session with `policy="read-only"` + `permission_mode="yolo"`, confirm policy still blocks writes (proof that policy and permission_mode are independent layers)
+- [X] ~~T025 [P] Add policy block logging~~ **v2.8 废弃**: `appendToWireLog` 随 approveAll 移除。阻断事件不再自动写入 wire.jsonl。审批记录由 Kimi Server 管理。
+- [X] T026 Run end-to-end smoke test — create read-only session → trigger blocked write → verify Bash 后台轮询检测到 awaiting_approval → PM 手动 approve_tool(approval_id) → verify tool allowed; auto session 零审批验证：create_session(permission_mode="auto") → submitPrompt 自动 permission_mode: auto
 
 ---
 

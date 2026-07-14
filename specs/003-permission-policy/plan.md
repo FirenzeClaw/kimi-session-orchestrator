@@ -3,7 +3,7 @@
 **Feature**: `003-permission-policy`
 **Branch**: `master` (plan only; implementation on feature branch)
 **Date**: 2026-07-07
-**Status**: Planning
+**Status**: Done (v2.8 — approveAll 移除，Bash→PM 手动决策闭环)
 
 ---
 
@@ -135,15 +135,13 @@
 - `types.ts`: 新增 `IPolicyEngine` 接口，`TunnelServices` 增加 `policyEngine?: IPolicyEngine`
 - `index.ts`: 创建 `PolicyEngine` 实例，注入 services
 
-#### Task 3.2: 修改 `wire-client.ts` 审批流
-- 在 `handleDirectEvent` 的 `awaiting_approval` 分支中:
-  1. 获取 pending approvals
-  2. 对每个 approval，提取工具名
-  3. 调用 `policyEngine.check(policy, toolName)`
-  4. `allow` → 自动 approve（保持现有行为）
-  5. `deny` → `POST .../approvals/{id}` with `decision: "denied"` + 阻断原因
-  6. `require_approval` → 暂不处理，通过 `messageQueue` 广播到 PM Dashboard
-- 新增 `setPolicyForSession(sessionId, policySpec)` 方法
+#### Task 3.2: 修改 `wire-client.ts` 审批流（v2.8 更新）
+- **原设计**: `handleDirectEvent` 的 `awaiting_approval` 分支中自动调用 `approveAll()` 根据策略裁决
+- **v2.8 实现**: 移除 `approveAll()` 自动裁决引擎
+  - `submitPrompt` 检查 `sessionPermissionMode === "auto"` 时自动发送 `permission_mode: "auto"`（auto session 零审批）
+  - 移除 `waitForStatus` / `waitForApproval` 中的 auto-approve 逻辑
+  - 移除 `handleDirectEvent` 中 awaiting_approval 触发 approveAll 的逻辑
+- 审批决策权完全归 PM：Bash 后台輪詢检测 → PM 手动 `approve_tool` / `deny_tool`
 
 #### Task 3.3: 修改工具——新增 `policy` 参数
 - `create-session.ts`: 新增 `policy: z.string().optional()`，创建后调用 `policyEngine.bind()`
@@ -164,27 +162,28 @@
 
 ---
 
-### Phase 4: Dashboard & Polish
+### Phase 4: Bash 回调 + PM 手动决策（v2.8 重设计）
 
-**目标**: PM 通过 Dashboard 实时看到阻断事件。
+**目标**: PM 通过 Bash 后台轮询 + MCP 工具手动决策审批。
 
-#### Task 4.1: Dashboard 阻断事件面板
-- `workflow-console.html`:
-  - 新增"策略阻断"面板区域
-  - 监听 WS 消息类型 `policy.block` 和 `policy.require_approval`
-  - 展示阻断事件列表（session、工具、策略规则、时间）
-  - 操作按钮：放行一次 / 放行 session / 拒绝
+**原设计（已废弃）**: WS push `policy.block` 事件到 workflow-console.html Dashboard。
+**v2.8 实现**: 
+- Bash 后台 `while` 循环检测 `status === "awaiting_approval"` → 通知 PM
+- PM 审查 pending approvals → `approve_tool(approval_id, scope="session")` 或 `deny_tool(approval_id)`
+- `approveAll()` / `broadcastBlockEvent` / `appendToWireLog` 全部移除
 
-#### Task 4.2: 阻断日志记录
-- 在 `wire-client.ts` 阻断发生后:
-  - 记录 `BlockEvent` 到内存（供 `list_policies` 查询活跃阻断）
-  - 写入 session wire.jsonl 日志（格式: `{"type":"policy.block", ...}`）
+#### Task 4.1: 审批工具增强
+- `approve_tool`: scope 固定为 session（Kimi Server 约束）；API 失败返回 isError
+- `deny_tool`: block_id 可选，支持 approval_id 直接 POST Kimi Server
+
+#### Task 4.2: （废弃）阻断日志自动记录
+- `appendToWireLog` 随 approveAll 移除——审批记录由 Kimi Server 管理
 
 #### Task 4.3: 错误处理与边界
 - 策略文件不存在 → 明确错误消息
 - YAML 解析失败 → 报告行号
-- 工具名未知（不在任何规则的 tools 列表中）→ 使用 `defaultAction`
-- 审批 API 调用失败 → 重试 2 次 + 日志警告
+- 工具名未知 → 使用 `defaultAction`
+- 审批 API 调用失败 → 返回 isError（不再静默吞错）
 
 ---
 

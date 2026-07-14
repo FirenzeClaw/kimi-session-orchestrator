@@ -91,25 +91,36 @@ policy: z.string().optional()
 ```typescript
 {
   name: "approve_tool",
-  description: "放行被策略阻断的工具调用（仅 PM 使用）",
+  description: "放行被策略阻断的工具调用（仅 PM 使用）。Kimi Server 仅接受 scope=session。",
   inputSchema: {
-    block_id: z.string().describe("阻断事件 ID。从 PM Dashboard 或 list_blocked_calls 获取"),
-    scope: z.enum(["once", "session"]).default("once")
-      .describe("once=仅本次, session=本 session 后续同类工具均放行"),
+    block_id: z.string().optional()
+      .describe("阻断事件 ID。从 poll_session 或 watch_result 的 blocks 中获取。"),
+    scope: z.enum(["session"]).default("session")
+      .describe("Kimi Server 仅接受 session 范围放行。"),
+    session_id: z.string().optional()
+      .describe("目标 session ID"),
+    approval_id: z.string().optional()
+      .describe("Kimi Server 审批 ID（高级用法）"),
   }
 }
 ```
+
+**注**: scope 固定为 `session`（Kimi Server 约束）。`scope=session` 时同时解绑 session 绑定的策略。
 
 ### 响应
 
 ```json
 {
   "approved": true,
+  "api_approved": true,
   "block_id": "uuid-xxx",
   "tool": "Bash",
-  "scope": "once"
+  "scope": "session",
+  "session_id": "session_abc123"
 }
 ```
+
+**错误响应**: API 调用失败时返回 `isError: true`，不再静默吞错。
 
 ---
 
@@ -122,20 +133,31 @@ policy: z.string().optional()
   name: "deny_tool",
   description: "拒绝被策略阻断或待审批的工具调用（仅 PM 使用）",
   inputSchema: {
-    block_id: z.string().describe("阻断事件 ID"),
+    block_id: z.string().optional()
+      .describe("阻断事件 ID。从 poll_session 或 watch_result 的 blocks 中获取。"),
+    session_id: z.string().optional()
+      .describe("目标 session ID"),
+    approval_id: z.string().optional()
+      .describe("Kimi Server 审批 ID（高级用法）"),
   }
 }
 ```
+
+`block_id` 可选——当提供 `approval_id` 时可直接 POST Kimi Server 拒绝，不需要 block_id。
 
 ### 响应
 
 ```json
 {
   "denied": true,
+  "api_denied": true,
   "block_id": "uuid-xxx",
-  "tool": "Bash"
+  "tool": "Bash",
+  "session_id": "session_abc123"
 }
 ```
+
+**错误响应**: API 调用失败时返回 `isError: true`，不再静默吞错。
 
 ---
 

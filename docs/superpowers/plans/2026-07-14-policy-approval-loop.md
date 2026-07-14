@@ -1,6 +1,7 @@
 # 策略阻断 → PM 审批闭环 — 实现计划
 
 > **面向 AI 代理的工作者：** 使用 subagent-driven-development（推荐）或 executing-plans 逐任务实现。步骤使用复选框（`- [ ]`）语法跟踪进度。
+> **⚠️ 架构已升级（2026-07-14 v2.8）**: 本计划描述的 `approveAll()` 自动裁决引擎已移除。当前架构为 Bash 回调 + PM 手动 `approve_tool`/`deny_tool`。本文档保留为历史参考。
 
 **目标：** PM 能发现被策略阻断的 session（`awaiting_approval`）→ 拿到 `approval_id` → 用 `approve_tool` 放行 → `scope="session"` 解绑策略。
 

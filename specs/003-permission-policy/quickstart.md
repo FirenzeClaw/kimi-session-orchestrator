@@ -73,10 +73,9 @@ execute_prompt(
 
 ### 6. 处理阻断事件
 
-当 session 试图执行被禁工具时，PM Dashboard 会自动显示阻断通知。PM 可以：
-- **放行一次**: `approve_tool(block_id, scope="once")`
-- **放行本 session**: `approve_tool(block_id, scope="session")`
-- **拒绝**: `deny_tool(block_id)`
+当 session 试图执行被禁工具时，状态变为 `awaiting_approval`。PM 通过 Bash 后台轮询或 poll_session 检测后，手动决策：
+- **放行**: `approve_tool(approval_id, scope="session")` → 放行 + 解绑 policy
+- **拒绝**: `deny_tool(approval_id)` → 拒绝工具调用
 
 ---
 

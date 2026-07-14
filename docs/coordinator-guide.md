@@ -759,7 +759,7 @@ Tunnel WireClient 的防御层次：
 |------|------|
 | 同一 turn 内多次 poll | 浪费 token + MCP 开销 |
 | `wait=true` | MCP 30s 超时截断 |
-| 不传 `auto_mode=true` 且不审批 | Session 卡住 |
+| manual session 不审批 | Session 卡住 — 需 PM 手动 approve_tool / deny_tool |
 | 手动拼接 curl 替代 `poll_command` | 平台兼容问题 |
 | 内容不截断直接传递 | hex escape 错误 / token 爆炸 |
 
