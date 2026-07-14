@@ -170,7 +170,7 @@ for m in data.get('items',[]):
 
 **原理**：Kimi Code 后台任务基于操作系统进程退出信号，零 CPU 轮询开销。bash 进程 curl 等到 idle 后退出 → runtime 注入 `<notification>` 到统筹 session。
 
-> ⛔ **轮询脚本陷阱（v2.8.3 已修复）**：`execute_prompt` 返回的 `poll_command` 已正确格式化。`fetch_result` 使用 Python `urllib.request` 直连 HTTP（无 curl 管道截断）+ `PYTHONIOENCODING=utf-8`（Windows emoji 兼容）。**始终直接使用 `poll_command` 字段内容，不要改写。** 原始陷阱：bash 双引号 `\n` 不展开 + `2>/dev/null` 静默吞 `JSONDecodeError`；curl 管道大响应截断。
+> ⛔ **轮询脚本陷阱（v2.8.4 已修复）**：`execute_prompt` 返回的 `poll_command` 已正确格式化。`fetch_result` 使用 Python `urllib.request` 直连 HTTP（无 curl 管道截断）+ `PYTHONIOENCODING=utf-8`（Windows emoji 兼容）。**始终直接使用 `poll_command` 字段内容，不要改写。** 原始陷阱：bash 双引号 `\n` 不展开 + `2>/dev/null` 静默吞 `JSONDecodeError`；curl 管道大响应截断。
 
 ### 备选：MCP 内部工具（轻量场景）
 
