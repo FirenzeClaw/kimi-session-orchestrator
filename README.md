@@ -573,6 +573,7 @@ npm start
 
 | 日期 | 版本 | 变更 |
 |------|:--:|------|
+| 2026-07-14 | v2.8.3 | poll_command `fetch_result` 彻底修复：curl 管道截断 → Python `urllib` 直连 HTTP；`2>/dev/null` 移除（错误不再静默吞）；Windows GBK emoji 乱码 → `PYTHONIOENCODING=utf-8` |
 | 2026-07-14 | v2.8.2 | `detectKimiServerUrl()` 过期 lock 自动清理——PID 活性检测 + 自动删 lock + `connect()` 重连前 URL 重新检测 |
 | 2026-07-12 | v2.8.1 | "更新工具"章节补全：新增更新前检查（kimi web 运行 + token 校验）+ 孤儿进程清理 + `/reload` 原理说明；本机实测确认 kimi web 未运行是 ECONNREFUSED 最常见根因 |
 | 2026-07-11 | v2.8 | Skill 拆分加载 + xmind-orchestrated（task session 隔离困境分析）+ 注入格式修正 + poll-command 离线检测 + 全文档重构 |

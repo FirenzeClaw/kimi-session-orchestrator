@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-14 | kimi-code (fix) | poll_command fetch_result 彻底修复：curl 管道截断 → Python urllib 直连 HTTP；移除 2>/dev/null 静默吞错；Windows GBK emoji 乱码 → PYTHONIOENCODING=utf-8
   2026-07-14 | kimi-code (docs) | 背景轮询 fetch_result 脚本陷阱：bash 双引号 \n 不展开 + Python -c 语法错误 + 2>/dev/null 静默吞错 → 始终用 poll_command 自动生成版
   2026-07-14 | kimi-code (docs) | AGENTS.md 瘦身 22→14 KB + Bash 轮询示例修复（端口 lock 检测 + SID 赋值）
   2026-07-14 | kimi-code (fix) | Wire Client 过期 lock 自动清理：detectKimiServerUrl() PID 活性检测 + 自动删 lock；connect() 每次重连前重新检测 URL
@@ -169,7 +170,7 @@ for m in data.get('items',[]):
 
 **原理**：Kimi Code 后台任务基于操作系统进程退出信号，零 CPU 轮询开销。bash 进程 curl 等到 idle 后退出 → runtime 注入 `<notification>` 到统筹 session。
 
-> ⛔ **轮询脚本陷阱**：不要手写简化版 `fetch_result`。`execute_prompt` 返回的 `poll_command` 已正确格式化——Python `-c` 使用真正的多行字符串。**手写时若在 bash 双引号内用 `\n` 代替换行，`\n` 不会被展开**，Python 收到非法 token 触发 `SyntaxError`，被 `2>/dev/null` 静默吞掉 → 输出永远为空。**始终直接使用 `poll_command` 字段内容，不要改写。**
+> ⛔ **轮询脚本陷阱（v2.8.3 已修复）**：`execute_prompt` 返回的 `poll_command` 已正确格式化。`fetch_result` 使用 Python `urllib.request` 直连 HTTP（无 curl 管道截断）+ `PYTHONIOENCODING=utf-8`（Windows emoji 兼容）。**始终直接使用 `poll_command` 字段内容，不要改写。** 原始陷阱：bash 双引号 `\n` 不展开 + `2>/dev/null` 静默吞 `JSONDecodeError`；curl 管道大响应截断。
 
 ### 备选：MCP 内部工具（轻量场景）
 
