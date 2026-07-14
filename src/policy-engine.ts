@@ -7,7 +7,7 @@
 
 import { resolve as pathResolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Policy, PolicyDecision, BlockEvent, SessionPolicyBinding } from "./policy-types.js";
+import type { Policy, PolicyDecision, SessionPolicyBinding } from "./policy-types.js";
 import { BUILTIN_POLICIES } from "./policy-builtins.js";
 import { loadPolicyFile, listPolicyFiles } from "./policy-store.js";
 
@@ -28,14 +28,7 @@ export interface IPolicyEngine {
   getBlockMessage(policy: Policy, ruleName: string, toolName: string): string;
   /** List all available policies (built-in + custom). */
   listPolicies(cwd: string): { builtin: string[]; custom: ReturnType<typeof listPolicyFiles> };
-  /** Record a block event for audit and dashboard. */
-  recordBlock(block: BlockEvent): void;
-  /** Get pending (unresolved) block events. */
-  getPendingBlocks(): BlockEvent[];
-  /** Resolve a block event. */
-  resolveBlock(blockId: string, resolution: "approved" | "denied"): BlockEvent | null;
-  /** Get unresolved block events for a specific session. */
-  getBlocksBySession(sessionId: string): BlockEvent[];
+
 }
 
 // ── Implementation ──────────────────────────────────────────────────────────────
@@ -43,9 +36,6 @@ export interface IPolicyEngine {
 export class PolicyEngine implements IPolicyEngine {
   /** Session → policy bindings (in-memory, tied to tunnel process lifetime). */
   private bindings = new Map<string, SessionPolicyBinding>();
-
-  /** Block event records for audit and PM dashboard. */
-  private blocks = new Map<string, BlockEvent>();
 
   // ── Resolve ──────────────────────────────────────────────────────────────────
 
@@ -168,28 +158,4 @@ export class PolicyEngine implements IPolicyEngine {
     };
   }
 
-  // ── Block event tracking ─────────────────────────────────────────────────────
-
-  recordBlock(block: BlockEvent): void {
-    this.blocks.set(block.id, block);
-  }
-
-  getPendingBlocks(): BlockEvent[] {
-    return Array.from(this.blocks.values()).filter((b) => !b.resolved);
-  }
-
-  getBlocksBySession(sessionId: string): BlockEvent[] {
-    return Array.from(this.blocks.values()).filter(
-      (b) => b.sessionId === sessionId && !b.resolved
-    );
-  }
-
-  resolveBlock(blockId: string, resolution: "approved" | "denied"): BlockEvent | null {
-    const block = this.blocks.get(blockId);
-    if (!block) return null;
-    block.resolved = true;
-    block.resolution = resolution;
-    this.blocks.set(blockId, block);
-    return block;
-  }
 }

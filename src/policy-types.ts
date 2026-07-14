@@ -68,22 +68,6 @@ export interface SessionPolicyBinding {
   boundBy?: string;
 }
 
-/** A blocked tool call event, recorded for audit and dashboard display. */
-export interface BlockEvent {
-  id: string;
-  sessionId: string;
-  toolName: string;
-  policyName: string;
-  ruleName: string;
-  action: "deny" | "require_approval";
-  message: string;
-  timestamp: string;
-  resolved: boolean;
-  resolution: "approved" | "denied" | null;
-  /** Kimi Server approval ID — used by PM to POST override via approve_tool. */
-  approvalId?: string;
-}
-
 // ── Known kimi-code tool names ──────────────────────────────────────────────────
 
 /** All kimi-code built-in tool names that policies may reference.

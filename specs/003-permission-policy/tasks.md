@@ -87,7 +87,7 @@
 
 - [X] T019 [P] [US4] Create `src/tools/approve-tool.ts` — register `approve_tool` MCP tool: accepts `block_id` (optional), `scope` (Kimi Server 仅支持 `"session"`), `session_id` (optional), `approval_id` (optional); scope=session 时解绑 session 策略；API 失败返回 isError 而非静默吞错
 - [X] T020 [P] [US4] Create `src/tools/deny-tool.ts` — register `deny_tool` MCP tool: accepts `block_id` (optional), `session_id` (optional), `approval_id` (optional); 当提供 approval_id 时直接 POST Kimi Server 拒绝；API 失败返回 isError
-- [X] ~~T021 [US4] Update `src/wire-client.ts` — auto-broadcast policy.block events~~ **v2.8 废弃**: approveAll 已移除，WS 自动推送阻断事件不再需要。审批改为 Bash 回调 + PM 手动决策。BlockEvent 记录保留在 policy-engine 中供 approve_tool/deny_tool 查询。
+- [X] ~~T021 [US4] Update `src/wire-client.ts` — auto-broadcast policy.block events~~ **v2.8 废弃**: approveAll 已移除，WS 自动推送阻断事件不再需要。BlockEvent 类型已从 policy-types.ts 完全移除，审批改为 Bash 回调 + PM 手动决策。
 - [X] ~~T022 [US4] Update `src/public/workflow-console.html`~~ **v2.8 废弃**: WS 推送 `policy.block` 事件随 approveAll 移除。PM 改为 Bash 后台轮询 + `approve_tool`/`deny_tool` 手动决策，不再依赖 Dashboard UI。
 - [X] T023 [US4] Update `src/mcp-server.ts` — import and register `registerApproveTool`, `registerDenyTool`
 

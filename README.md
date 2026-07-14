@@ -337,7 +337,7 @@ src/
 ├── policy-types.ts              # 策略类型 + Zod schema + 已知工具清单
 ├── policy-builtins.ts           # read-only / safe-edit / full-access
 ├── policy-store.ts              # YAML 策略文件 CRUD
-├── policy-engine.ts             # 策略解析/检查/绑定 + BlockEvent 追踪
+├── policy-engine.ts             # 策略解析/检查/绑定
 ├── memory-store.ts              # SQLite 持久化 + buildInjection()
 ├── memory-injector.ts           # 注入文本构建（thin wrapper）
 ├── tools/                       # 28 个 MCP 工具

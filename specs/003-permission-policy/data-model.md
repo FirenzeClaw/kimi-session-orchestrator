@@ -47,27 +47,11 @@
 
 ---
 
-### 3. BlockEvent（阻断事件）
+### 3. BlockEvent（阻断事件）— v2.8 废弃
 
-一次被策略阻止的工具调用记录。
+> **v2.8**: `approveAll()` 自动裁决引擎已移除。阻断事件不再由 tunnel 追踪，审批记录由 Kimi Server 管理。`BlockEvent` 类型已从 `policy-types.ts` 中移除。
 
-| 字段 | 类型 | 描述 |
-|------|------|------|
-| `id` | `string` (UUID) | 事件唯一标识 |
-| `sessionId` | `string` | 被阻断的 task session ID |
-| `toolName` | `string` | 被阻断的工具名（如 `"Bash"`）|
-| `policyName` | `string` | 生效的策略名 |
-| `ruleName` | `string` | 生效的规则名 |
-| `action` | `"deny"` \| `"require_approval"` | 阻断动作 |
-| `message` | `string` | 阻断原因消息（含策略规则引用）|
-| `timestamp` | `string` (ISO 8601) | 阻断时间 |
-| `resolved` | `boolean` | PM 是否已处理（审批/手动放行）|
-| `resolution` | `"approved"` \| `"denied"` \| `null` | 处理结果 |
-
-**生命周期**:
-```
-created → resolved (approved|denied)
-```
+原设计：一次被策略阻止的工具调用记录，用于 PM Dashboard 实时展示和 approve_tool/deny_tool 的 block_id 参数。现改为 Bash 后台轮询 + PM 手动决策（`approve_tool(approval_id)` / `deny_tool(approval_id)`）。
 
 ---
 
@@ -166,10 +150,6 @@ Policy 1 ──── * PolicyRule
    │ binds
    ▼
 SessionPolicyBinding ──── Session
-   │
-   │ produces
-   ▼
-BlockEvent
 ```
 
 ---
@@ -179,7 +159,7 @@ BlockEvent
 - **内置策略**: 硬编码在 `src/policy-builtins.ts`
 - **自定义策略**: YAML 文件 → `<projectCwd>/.kimi-tunnel/policies/<name>.yaml`
 - **运行时绑定**: 内存 `Map<string, SessionPolicyBinding>`（进程重启后丢失，符合 session 生命周期语义）
-- **阻断日志**: 写入 session 的 wire.jsonl（复用现有日志机制），格式为 `event.policy_block`
+- **阻断日志**: v2.8 后审批记录由 Kimi Server 管理，tunnel 不再写入 wire.jsonl
 
 ---
 

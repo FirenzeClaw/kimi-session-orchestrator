@@ -19,16 +19,6 @@ export function registerDenyTool(server: McpServer, services: TunnelServices): v
     },
     async ({ block_id, session_id, approval_id }) => {
       let sid = session_id;
-      let toolName = "unknown";
-
-      // Resolve block if available
-      if (block_id && policyEngine) {
-        const block = policyEngine.resolveBlock(block_id, "denied");
-        if (block) {
-          sid = sid || block.sessionId;
-          toolName = block.toolName;
-        }
-      }
 
       if (!sid && !approval_id) {
         return { content: [{ type: "text", text: "缺少 session_id 或 approval_id" }], isError: true };
@@ -59,7 +49,7 @@ export function registerDenyTool(server: McpServer, services: TunnelServices): v
               denied: true,
               api_denied: apiDenied,
               ...(block_id && { block_id }),
-              tool: toolName,
+              tool: "unknown",
               session_id: sid,
             }, null, 2),
           }],

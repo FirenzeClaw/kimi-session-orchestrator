@@ -126,7 +126,7 @@ rules:
 
 - **策略（Policy）**：一组工具权限规则，可为内置级别或 YAML 文件
 - **策略规则（Rule）**：单条规则——名称、动作（allow/deny/require_approval）、工具列表、可选阻断消息
-- **阻断事件（BlockEvent）**：一次被策略阻止的工具调用记录——session_id、工具名、策略规则名、时间戳
+- **阻断事件**：一次被策略阻止的工具调用——session_id、工具名、策略规则名、时间戳。v2.8 后审批由 Kimi Server 管理，tunnel 不再追踪 BlockEvent。
 
 ---
 

@@ -45,7 +45,7 @@ src/
 ├── policy-types.ts          # 策略类型定义 + Zod schema + 已知工具清单
 ├── policy-builtins.ts       # 3个内置策略（read-only/safe-edit/full-access）
 ├── policy-store.ts          # YAML策略文件CRUD（.kimi-tunnel/policies/）+ 校验
-├── policy-engine.ts         # 策略引擎：解析/检查/绑定/阻断消息 + BlockEvent追踪
+├── policy-engine.ts         # 策略引擎：解析/检查/绑定/阻断消息
 ├── memory-store.ts          # SQLite 共享内存 CRUD — set/get/list/delete/status/archive（SPEC 002）
 ├── memory-injector.ts       # 内存注入文本拼接：根据 profile 构建 Markdown 前缀（SPEC 002）
 ├── tools/

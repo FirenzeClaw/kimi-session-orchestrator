@@ -22,24 +22,16 @@ export function registerApproveTool(server: McpServer, services: TunnelServices)
       approval_id: z.string().optional().describe("Kimi Server 审批 ID（高级用法）"),
     },
     async ({ block_id, scope, session_id, approval_id }) => {
-      // Resolve block event if available (may be null after tunnel reload)
-      let sid = session_id;
-      let block: { toolName: string; sessionId: string } | null = null;
-      if (block_id && policyEngine) {
-        block = policyEngine.resolveBlock(block_id, "approved");
-        if (block) {
-          sid = sid || block.sessionId;
-        }
-      }
+      const sid = session_id;
 
-      if (!sid) {
-        return { content: [{ type: "text", text: "缺少 session_id：请提供 session_id 或有效的 block_id" }], isError: true };
+      if (!sid && !approval_id) {
+        return { content: [{ type: "text", text: "缺少 session_id 或 approval_id" }], isError: true };
       }
 
       try {
 
         // If scope=session, unbind the policy entirely
-        if (scope === "session" && policyEngine) {
+        if (scope === "session" && policyEngine && sid) {
           policyEngine.unbind(sid);
           process.stderr.write(`[approve-tool] Policy unbound for session ${sid}\n`);
         }
@@ -70,7 +62,7 @@ export function registerApproveTool(server: McpServer, services: TunnelServices)
                   approved: true,
                   api_approved: apiApproved,
                   ...(block_id && { block_id }),
-                  tool: block?.toolName || "unknown",
+                  tool: "unknown",
                   scope,
                   session_id: sid,
                 },

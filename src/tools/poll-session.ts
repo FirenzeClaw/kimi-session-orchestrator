@@ -4,21 +4,7 @@ import type { TunnelServices } from "../types.js";
 import { pollSessionStatus } from "../session-log-reader.js";
 
 export function registerPollSession(server: McpServer, services?: TunnelServices): void {
-  const { wireClient, workflowEngine, policyEngine } = services || {};
-
-  const formatBlocks = (sid: string) => {
-    const blocks = policyEngine?.getBlocksBySession(sid) ?? [];
-    if (blocks.length === 0) return undefined;
-    return blocks.map(b => ({
-      block_id: b.id,
-      action: b.action,
-      tool_name: b.toolName,
-      rule: b.ruleName,
-      policy: b.policyName,
-      message: b.message,
-      created_at: b.timestamp,
-    }));
-  };
+  const { wireClient, workflowEngine } = services || {};
 
   server.tool(
     "poll_session",
@@ -38,7 +24,6 @@ export function registerPollSession(server: McpServer, services?: TunnelServices
           };
           // Check engine for active flow
           const flow = workflowEngine?.getFlow(session_id);
-          const blks = formatBlocks(session_id);
           return {
             content: [{
               type: "text",
@@ -50,7 +35,6 @@ export function registerPollSession(server: McpServer, services?: TunnelServices
                 totalLines: 0,  // WS cache doesn't track line count
                 source: "ws_cache",
                 ...(flow && { flow }),
-                ...(blks && { blocks: blks }),
               }, null, 2),
             }],
           };
@@ -73,7 +57,6 @@ export function registerPollSession(server: McpServer, services?: TunnelServices
       };
 
       const flow = workflowEngine?.getFlow(session_id);
-      const blks = formatBlocks(session_id);
 
       return {
         content: [{
@@ -83,7 +66,6 @@ export function registerPollSession(server: McpServer, services?: TunnelServices
             stateLabel: stateLabels[status.state] || status.state,
             source: "file_parse",
             ...(flow && { flow }),
-            ...(blks && { blocks: blks }),
           }, null, 2),
         }],
       };
