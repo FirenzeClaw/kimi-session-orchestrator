@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-15 | kimi-code (v2.12) | Loop Orchestrator v2 独立：loop-orchestrator skill 从 kimi-session-orchestrator 完全剥离（9 文件，含 6 阶段执行循环 + 注入防腐化 + 阻塞干预 + Memory 集成）；主 skill Q1 移除 Loop 入口；删除旧 guide-loop-*.md 7 文件；README/AGENTS 更新
   2026-07-15 | kimi-code (v2.11) | 架构深化第2轮：IWireClient → ISessionClient/IStatusClient/IPushClient 三接口拆分（20法→7/2/8）；消除 ambient sessionId 并发竞态（submitPrompt/sendPrompt/getSessionStatus 改为参数传递，8个save/restore块删除）；apiGet/apiPost → getSessionMessages/resolveApproval 语义方法；记忆注入 extract → tools/helpers.ts（injectMemoryIntoPrompt + setMemoryProfileWithExpiry，消除2处副本）；移除 WorkflowEngine || 回退分支（TunnelServices.workflowEngine 非可选）；tools/manifest.ts 桶文件；session-log-reader 共享 parseWireJsonl 解析流
   2026-07-15 | kimi-code (v2.10) | 架构深化：WireClient 上帝类拆分 → IWireClient 接口 + server-lock.ts；删除 memory-injector.ts（13行死代码）；新增 tools/helpers.ts（preparePrompt + ensureConnected 消除 4×重复样板）；记忆 profile 从 WireClient 移至 MemoryStore；WorkflowEngine/SessionWatcher 改用 IWireClient；workflow-store 手写 toYaml → js-yaml dump；/api/send 死端点移除
   2026-07-15 | kimi-code (docs) | README 全面核查：v2.9.0→v2.9.1 badge、4→6 skill 数量、28→29 工具数、Loop 场景行、参考文档表补 2 issue、新增 FAQ、wire 重连说明更新
@@ -268,11 +269,12 @@ manual session 的工具调用由 PM 手动决策，流程：
 
 ## Agent Skills
 
-本项目配套 6 个 skill，安装后自动生效：
+本项目配套 7 个 skill，安装后自动生效：
 
 | Skill | 用途 | 文件 | 安装位置 |
 |-------|------|------|---------|
-| `kimi-session-orchestrator` | MCP 工具完整使用规范——按角色维度（Loop Engineering/规划派发/长轮次编排/执行者）加载对应指南（10 guide 分层）。启动时 auto 检测 + Q1→Q3 分叉，按需 Read 对应 guide 文档以节省 token | `skills/kimi-session-orchestrator/SKILL.md` | `~/.agents/skills/` |
+| `kimi-session-orchestrator` | MCP 工具完整使用规范——按角色维度加载对应指南，按需 Read 以节省 token | `skills/kimi-session-orchestrator/SKILL.md` | `~/.agents/skills/` |
+| `loop-orchestrator` | PM | Loop Engineering 自主编排——独立 skill。用户给定目标后 PM 全权统筹循环，里程碑汇报，不降级目标。`/loop-orchestrator` 激活 | `skills/loop-orchestrator/SKILL.md` | `~/.kimi-code/skills/` |
 | `agent-session-monitor` | 通过 wire.jsonl 尾部日志推断 session 运行状态（无需 API 认证） | `skills/agent-session-monitor.md` | `~/.agents/skills/` |
 | `mcp-async-tool` | MCP 异步工具设计模式——解决 >30s 任务被协议超时截断的问题 | `skills/mcp-async-tool.md` | `~/.agents/skills/` |
 | `session-retire` | **PM 专用**——退役 task session + 自动化接班 pipeline：归档记忆 → 提取上下文 → 创建接班 session → 注入 7-block 模板 → 新 session 自举 | `skills/session-retire/SKILL.md` | `~/.kimi-code/skills/` |
@@ -290,4 +292,8 @@ cp skills/mcp-async-tool.md ~/.agents/skills/mcp-async-tool/SKILL.md
 
 # PM 级 skill（统筹 session 按需调用）
 cp -r skills/session-retire ~/.kimi-code/skills/session-retire
+
+# PM 级 skill — Loop Orchestrator
+rm -rf ~/.kimi-code/skills/loop-orchestrator
+cp -r skills/loop-orchestrator ~/.kimi-code/skills/loop-orchestrator
 ```

@@ -18,7 +18,7 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用
 - **Auto 模式**：用纯文本提问，同时提示用户 `/auto` 可退出
   ```
   **Q1: 角色与维度？**
-  A: Loop Engineering / B: PM 规划派发 / C: PM 长轮次编排 / D: 执行者
+  A: PM 规划派发 / B: PM 长轮次编排 / C: 执行者
   （提示：输入 /auto 退出 auto 模式可获得交互式选项）
   ```
 - **非 auto 模式**：使用 AskUserQuestion 工具，一次一个问题
@@ -27,32 +27,18 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用
 ### 第一轮：Q1 — 角色与维度
 
 非 auto 模式用 AskUserQuestion，auto 模式用纯文本提问。选项：
-- **A: PM 统筹 — Loop Engineering 编排** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-loop-entry.md`
-- **B: PM 统筹 — 规划派发与验收** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-planning.md`
-- **C: PM 统筹 — 长轮次编排验收修复** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-orchestration.md`
-- **D: 执行者** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-execute.md`
+- **A: PM 统筹 — 规划派发与验收** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-planning.md`
+- **B: PM 统筹 — 长轮次编排验收修复** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-orchestration.md`
+- **C: 执行者** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-execute.md`
 
 ### 第二轮：Q2 — 目标与追问
 
 #### Q2a: 最终目标？（通用）
 自由文本。示例："审查 specs/003 的全部实现，修复发现的 bug，输出审查报告"
 
-#### Q2b: 派发模式？（仅 Q1=B 时追问）
+#### Q2b: 派发模式？（仅 Q1=A 时追问）
 - **纯派发验收**：PM 拆解 → 派发 task session 执行 → PM 对照规范验收
 - **派发+自审**：PM 拆解 → 派发 task session 执行 → session 自审查修复 → PM 验收
-
-### Loop 子问题（仅 Q1=A 时）
-
-选择 Q1=A 后进入 Loop Engineering 子问题树：
-
-#### Q2 — 循环类型
-- **A: 编排自循环 Loop 实施** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-loop-implement.md`
-- **B: 编排自循环 Loop 验收** → 回答后 Read `~/.agents/skills/kimi-session-orchestrator/guide-loop-verify.md`
-
-#### Q3 — 并行度
-根据 Q2 回答，追问并行策略：
-- **A: 单 task session 串行循环** → 回答后 Read 对应终端 guide（guide-loop-implement-single.md 或 guide-loop-verify-single.md）
-- **B: 多 session 并行循环** → 回答后 Read 对应终端 guide（guide-loop-implement-parallel.md 或 guide-loop-verify-parallel.md）
 
 ### 第三轮：Q3 — 决策模式
 - **自主执行**：阻塞自判（重试/跳过/降级），结果交付时汇报
@@ -61,7 +47,6 @@ description: 当需要操作 kimi-session-orchestrator MCP 工具时使用
 ### 运行模式设定
 
 根据 Q1+Q3 组合设定行为：
-- Loop+任意：自动进入 Q2→Q3→加载终端 guide。执行中自主完成 grade_step 验证闭环，关键点暂停等用户确认。
 - PM+自主：自主完成 理解→拆解→编排→收集→合成 全流程
 - PM+关键点：每阶段暂停展示进度
 - 执行者+任意：不使用 PM 决策框架，仅工具操作辅助

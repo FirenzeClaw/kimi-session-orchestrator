@@ -1,0 +1,30 @@
+# Memory 集成规范
+
+> 加载条件：阶段 0 和阶段 5 时 Read。Loop 全程读写的 memory 操作映射。
+
+---
+
+## §1 各阶段 Memory 操作
+
+| 阶段 | 操作 | 内容 |
+|------|------|------|
+| 0 启动 | `memory_get("project/meta")` | 项目技术栈/规范/约定 |
+| 0 启动 | `memory_get("project/learnings")` | 过往 session 沉淀经验 |
+| 1 拆解 | `memory_set("session/loop-<id>/plan", json)` | 工作包拆解方案 |
+| 2 每轮完成 | `memory_set("session/<sid>/findings")` | 关键发现/FAIL 项/修复记录 |
+| 3 阻塞 | `memory_set("session/loop-<id>/blockages")` | 阻塞原因+诊断结果 |
+| 4 里程碑 | `memory_set("session/loop-<id>/milestones")` | 完成模块+PASS/FAIL 统计 |
+| 5 交付 | `memory_archive(session_id)` | L2 findings → L1 learnings |
+
+## §2 命名空间约定
+
+- `loop-id = loop-<ISO timestamp>`（如 `loop-2026-07-15T120000Z`）
+- Loop 级数据写入 `session/loop-<loop-id>/` 前缀
+- Task session 级数据写入 `session/<sid>/findings`
+- 知识库级数据读写 `project/meta`、`project/learnings`
+
+## §3 注意事项
+
+- `memory_set` 仅接受 `project/` 或 `session/` 前缀（代码限制）
+- `memory_get` 无 namespace 限制
+- 写入 `session/<sid>/findings` 后，交付时通过 `memory_archive(sid)` 自动提升为 `project/learnings`
