@@ -10,6 +10,7 @@ export const BlockageTypeEnum = z.enum([
   "timeout",
   "ambiguous",
   "tool_approval",
+  "loop_detected",
 ]);
 export type BlockageType = z.infer<typeof BlockageTypeEnum>;
 

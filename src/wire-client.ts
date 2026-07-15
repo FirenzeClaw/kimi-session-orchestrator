@@ -17,7 +17,7 @@ import { WireTransport } from "./wire-transport.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import type { MessageQueue } from "./message-queue.js";
 
-interface KimiContentBlock {
+export interface KimiContentBlock {
   type: "text" | "thinking" | "tool_use" | "tool_result";
   text?: string;
   thinking?: string;
