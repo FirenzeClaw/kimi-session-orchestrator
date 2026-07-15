@@ -501,12 +501,20 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
    * Wait for a session status change via WebSocket.
    * Falls back to polling if WebSocket is not connected.
    */
-  private waitForStatus(
+  private async waitForStatus(
     sessionId: string,
     targetStatus: string,
     timeoutMs: number,
     autoApprove: boolean
   ): Promise<string> {
+    // Fast path: check current status before setting up any resolver/poll loop.
+    // Avoids the common case where session is already idle → no status_changed
+    // event will fire → resolver waits uselessly for full timeoutMs (v2.11 fix).
+    const currentStatus = await this.getSessionStatus(sessionId);
+    if (currentStatus === targetStatus || currentStatus === "unknown" || currentStatus === "aborted") {
+      return currentStatus;
+    }
+
     // If WebSocket is connected, use event-driven wait
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return new Promise((resolve, reject) => {
@@ -633,14 +641,18 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     this.wsSubscribe(sessionId);
 
     // Step 1: Submit prompt via REST
+    const promptBody: Record<string, unknown> = {
+      content: [{ type: "text", text: prompt }],
+    };
+    if (autoApprove || this.sessionPermissionMode === "auto") {
+      promptBody.permission_mode = "auto";
+    }
     const submitResp = await this.transport.apiPost<{
       prompt_id: string;
       user_message_id: string;
       status: string;
       content: KimiContentBlock[];
-    }>(`/api/v1/sessions/${sessionId}/prompts`, {
-      content: [{ type: "text", text: prompt }],
-    });
+    }>(`/api/v1/sessions/${sessionId}/prompts`, promptBody);
 
     const promptId = submitResp.prompt_id;
 
