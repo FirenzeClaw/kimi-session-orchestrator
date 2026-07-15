@@ -245,6 +245,7 @@ manual session 的工具调用由 PM 手动决策，流程：
 |------|------|
 | `API.md` | Kimi Server REST API 完整参考（51 端点） |
 | `docs/coordinator-guide.md` | **统筹 Session 准入规范（PM视角 v2.8）**——角色定位、工作分解、注意力管理、Skill调度、越权控制、红线 |
+| `docs/loop-engineering-analysis.md` | Loop Engineering 概念调研与项目对照——四层循环堆栈/三级 Agent Loop/逐项对齐/差距与改进方向 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎——已实施 |
 | `specs/002-session-memory-share/` | [DONE] Session 冷启动记忆共享——三层内存架构（MemoryStore + 6 MCP 工具 + 自动注入） |
 | `specs/003-permission-policy/` | [DONE] 权限与策略管理——read-only/safe-edit/full-access + 自定义YAML策略 |

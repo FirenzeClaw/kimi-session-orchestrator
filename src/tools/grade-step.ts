@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TunnelServices } from "../types.js";
+import { listIORecords } from "../session-log-reader.js";
 
 // 懒创建的 grader session ID，进程级复用
 let _graderSessionId: string | null = null;
@@ -24,17 +25,25 @@ export function registerGradeStep(server: McpServer, services: TunnelServices): 
         return { content: [{ type: "text", text: "Wire client 未连接。请先启动 Kimi Server。" }], isError: true };
       }
 
+      // 拉取目标 session 的 IO 记录，作为评分依据
+      const ioResult = await listIORecords(session_id, { limit: 5, maxContentLength: 8000 });
+      const sessionOutput = ioResult?.records
+        ?.map((r) => `[Turn ${r.turn}] ${r.type === "user" ? "Prompt" : "Response"}: ${r.content}`)
+        .join("\n\n") ?? "(无法读取 session 产出)";
+
       const prevSessionId = wireClient.getSessionId();
       const focusHint = focus ? `评分侧重维度: ${focus}。` : "";
 
-      const gradingPrompt = `你是独立产出质量评分助手。请阅读最近一轮 task session 的产出，根据以下验收标准评估质量。
+      const gradingPrompt = `你是独立产出质量评分助手。以下是 task session ${session_id} 的最近产出，请根据验收标准评估质量。
 严格仅返回 JSON，不含任何其他文字：{"pass":true|false,"score":0-100,"feedback":"具体原因，点明通过/不通过的具体证据"}
 
-验收标准：
+=== Session 产出 ===
+${sessionOutput}
+
+=== 验收标准 ===
 ${criteria}
 
-${focusHint}
-请根据 session ${session_id} 的最新产出进行评分。`;
+${focusHint}`;
 
       try {
         // 懒创建 grader session（独立 session，不污染 task session）

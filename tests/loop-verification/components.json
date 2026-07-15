@@ -1,0 +1,51 @@
+{
+  "description": "Loop Engineering 实施完整性验证 — 需要检查的组件清单",
+  "version": "1.0",
+  "components": [
+    {
+      "id": "grade_step",
+      "name": "grade_step 工具（LLM 自动评分）",
+      "expected_path": "src/tools/grade-step.ts",
+      "description": "基于预定义评分标准的 LLM 自动评分功能。",
+      "verification": "file_exists"
+    },
+    {
+      "id": "loop_fingerprint",
+      "name": "loop 指纹检测",
+      "expected_path": "src/workflow-engine.ts",
+      "description": "在 workflow-engine.ts 中检测重复执行模式的 loop 指纹。",
+      "verification": "grep_pattern",
+      "grep": "fingerprint|FINGERPRINT|loop_pattern|detectLoop"
+    },
+    {
+      "id": "blockage_detection",
+      "name": "堵塞检测系统（BLOCKAGE_PATTERNS）",
+      "expected_path": "src/workflow-engine.ts",
+      "description": "定义并识别堵塞模式的检测逻辑。",
+      "verification": "grep_pattern",
+      "grep": "BLOCKAGE_PATTERNS|blockage|isBlocked"
+    },
+    {
+      "id": "guide_layers",
+      "name": "guide 分层文件（7 个 guide-loop-*.md）",
+      "expected_paths": [
+        "docs/guide-loop-overview.md",
+        "docs/guide-loop-grade.md",
+        "docs/guide-loop-detection.md",
+        "docs/guide-loop-blockage.md",
+        "docs/guide-loop-recovery.md",
+        "docs/guide-loop-patterns.md",
+        "docs/guide-loop-metrics.md"
+      ],
+      "description": "Loop Engineering 7 层分级操作指南文档。",
+      "verification": "file_exists"
+    },
+    {
+      "id": "continue_workflow",
+      "name": "continue_workflow 决策工具",
+      "expected_path": "src/tools/continue-workflow.ts",
+      "description": "对暂停的工作流执行决策（retry/skip/abort/manual）。",
+      "verification": "file_exists"
+    }
+  ]
+}
