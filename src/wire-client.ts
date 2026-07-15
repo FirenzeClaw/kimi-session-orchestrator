@@ -9,11 +9,12 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { writeFileSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { WebSocket } from "ws";
 import { WireTransport } from "./wire-transport.js";
+import { detectKimiServerUrl } from "./server-lock.js";
+import type { IWireClient } from "./types.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import type { MessageQueue } from "./message-queue.js";
 
@@ -75,7 +76,7 @@ interface SessionEvent {
   };
 }
 
-export class WireClient {
+export class WireClient implements IWireClient {
   private baseUrl: string;
   private token: string;
   private sessionId: string;
@@ -111,8 +112,6 @@ export class WireClient {
   private policyEngine: PolicyEngine | null = null;
   // Message queue: broadcasts block events to WebSocket clients (PM Dashboard)
   private messageQueue: MessageQueue | null = null;
-  // Memory profiles: stores session → InjectionProfile mapping (SPEC 002)
-  private memoryProfiles = new Map<string, { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }>();
 
   constructor(sessionId?: string) {
     this.baseUrl =
@@ -169,21 +168,6 @@ export class WireClient {
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // Session creation
-
-  /**
-   * Store memory injection profile for a session (SPEC 002).
-   */
-  setMemoryProfile(sessionId: string, profile: { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }): void {
-    this.memoryProfiles.set(sessionId, profile);
-  }
-
-  /**
-   * Retrieve memory injection profile for a session (SPEC 002).
-   */
-  getMemoryProfile(sessionId: string): { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean } | null {
-    return this.memoryProfiles.get(sessionId) || null;
-  }
-  // ═══════════════════════════════════════════════════════════════════════════════
 
   async createSession(options: CreateSessionOptions): Promise<{ sessionId: string; title: string }> {
     const body: Record<string, unknown> = {
@@ -829,51 +813,5 @@ export class WireClient {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Check if a process with the given PID is currently alive (cross-platform). */
-function isProcessAlive(pid: number): boolean {
-  try {
-    // signal 0 is a no-op that checks existence; throws if PID not found
-    process.kill(pid, 0);
-    return true;
-  } catch (e: unknown) {
-    const err = e as NodeJS.ErrnoException;
-    return err.code !== "ESRCH";
-  }
-}
-
-/** Auto-detect Kimi Server URL from the lock file.
- *  Validates that the lock PID is still alive; if stale, cleans the lock
- *  and logs a diagnostic so users know to restart kimi web. */
-export function detectKimiServerUrl(): string {
-  try {
-    const lockPath = join(homedir(), ".kimi-code", "server", "lock");
-    const raw = readFileSync(lockPath, "utf-8");
-    const info = JSON.parse(raw) as { host: string; port: number; pid?: number; started_at?: string };
-
-    // ── Stale lock detection ──────────────────────────────────────────
-    if (info.pid && !isProcessAlive(info.pid)) {
-      const age = info.started_at
-        ? ` (started ${info.started_at})`
-        : "";
-      process.stderr.write(
-        `[wire-client] Stale lock detected: PID ${info.pid} is no longer running${age}.\n` +
-        `  The Kimi Server may have crashed or been killed — its lock file was left behind.\n` +
-        `  Auto-cleaning stale lock and falling back to default port.\n` +
-        `  Run "kimi web --no-open" to start the server, then /reload.\n`
-      );
-      try { unlinkSync(lockPath); } catch { /* best-effort cleanup */ }
-      return "http://127.0.0.1:5494";
-    }
-    // ──────────────────────────────────────────────────────────────────
-
-    if (info.host && info.port) {
-      return `http://${info.host}:${info.port}`;
-    }
-  } catch {
-    // lock file not found or unreadable — normal when no server is running
-  }
-  return "http://127.0.0.1:5494";
 }
 

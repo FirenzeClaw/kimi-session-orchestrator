@@ -1,4 +1,4 @@
-import type { WireClient } from "./wire-client.js";
+import type { IWireClient } from "./types.js";
 
 interface WatchEntry {
   sessionId: string;
@@ -16,10 +16,10 @@ interface WatchEntry {
  */
 export class SessionWatcher {
   private watches = new Map<string, WatchEntry>();
-  private wireClient: WireClient;
+  private wireClient: IWireClient;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(wireClient: WireClient) {
+  constructor(wireClient: IWireClient) {
     this.wireClient = wireClient;
   }
 

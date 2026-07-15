@@ -6,6 +6,8 @@ import type { MemoryEntry, InjectionProfile, IMemoryStore } from "./types.js";
 export class MemoryStore implements IMemoryStore {
   private db: DatabaseSync | null = null;
   private projectRoot: string | null = null;
+  // Session → InjectionProfile mapping (v2.10: moved from WireClient)
+  private _profiles = new Map<string, { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }>();
 
   resolveProjectRoot(cwd: string): string | null {
     let dir = cwd.replace(/\\/g, "/");
@@ -434,6 +436,18 @@ export class MemoryStore implements IMemoryStore {
       this.db = null;
       this.projectRoot = null;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Memory profiles (v2.10: moved from WireClient)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  setMemoryProfile(sessionId: string, profile: { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }): void {
+    this._profiles.set(sessionId, profile);
+  }
+
+  getMemoryProfile(sessionId: string): { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean } | null {
+    return this._profiles.get(sessionId) || null;
   }
 
   private rowToEntry(r: Record<string, unknown>): MemoryEntry {

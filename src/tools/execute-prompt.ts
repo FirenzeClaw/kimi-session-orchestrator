@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TunnelServices } from "../types.js";
 import { generatePollCommand } from "../poll-command.js";
+import { preparePrompt, ensureConnected } from "./helpers.js";
 
 export function registerExecutePrompt(server: McpServer, services: TunnelServices): void {
   const { wireClient } = services;
@@ -51,81 +52,35 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
         .describe("跳过共享内存上下文注入（SPEC 002）。默认 false。"),
     },
     async ({ session_id, prompt, include_thinking, timeout_ms, auto_mode, wait, policy, skip_memory }) => {
-      if (!wireClient.isConnected()) {
-        try {
-          await wireClient.connect();
-        } catch {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "Wire client 未连接到 Kimi Server。请先执行 `kimi web --no-open` 启动，并设置 KIMI_SERVER_TOKEN 环境变量。",
-              },
-            ],
-            isError: true,
-          };
-        }
+      if (!(await ensureConnected(services))) {
+        return {
+          content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先执行 `kimi web --no-open` 启动，并设置 KIMI_SERVER_TOKEN 环境变量。" }],
+          isError: true,
+        };
       }
 
       try {
         wireClient.setSessionId(session_id);
 
-        // Bind policy if specified (only if session not already bound)
-        if (policy) {
-          try {
-            wireClient.setSessionPolicy(session_id, policy);
-          } catch (policyErr) {
-            // Non-fatal: policy binding failure shouldn't block prompt submission
-            process.stderr.write(`[execute-prompt] Policy binding warning: ${(policyErr as Error).message}\n`);
-          }
-        }
-
-        // Bind memory injection context if profile exists (SPEC 002)
-        let effectivePrompt = prompt;
-        if (!skip_memory && services.memoryStore && services.tunnelProjectRoot) {
-          const profile = wireClient.getMemoryProfile(session_id);
-          if (profile && profile.level !== "off") {
-            try {
-              services.memoryStore.ensureDb(services.tunnelProjectRoot);
-              const injection = services.memoryStore.buildInjection({
-                  level: profile.level as "off" | "minimal" | "standard" | "full",
-                  maxBytes: 8192,
-                  fromSession: profile.fromSession,
-                  cwd: profile.cwd,
-                  hasExpiredEntries: profile.hasExpiredEntries,
-                });
-                if (injection) {
-                  const warning = profile.hasExpiredEntries
-                    ? "⚠️ 警告: 以下注入的部分条目已被 PM 标记为过期，内容可能不是最新。\n\n"
-                    : "";
-                  effectivePrompt = `${warning}${injection}\n\n---\n\n${prompt}`;
-                }
-            } catch {
-              // Non-fatal: memory injection failure shouldn't block prompt submission
-            }
-          }
-        }
+        const effectivePrompt = preparePrompt(services, {
+          sessionId: session_id,
+          prompt,
+          skipMemory: skip_memory,
+          policy,
+        });
 
         if (!wait) {
           // Fire-and-forget: submit prompt, return immediately with poll command
           const { promptId } = await wireClient.submitPrompt(effectivePrompt, { autoApprove: auto_mode });
           return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    submitted: true,
-                    session_id,
-                    prompt_id: promptId,
-                    hint: "prompt 已提交。将 poll_command 以 Bash(run_in_background=true) 执行，等待回执。",
-                    poll_command: generatePollCommand({ sessionId: session_id }),
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                submitted: true, session_id, prompt_id: promptId,
+                hint: "prompt 已提交。将 poll_command 以 Bash(run_in_background=true) 执行，等待回执。",
+                poll_command: generatePollCommand({ sessionId: session_id }),
+              }, null, 2),
+            }],
           };
         }
 
@@ -150,12 +105,7 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
         result.thinkingAvailable = response.thinkingText.length > 0;
 
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         const msg = (err as Error).message;
@@ -164,12 +114,7 @@ export function registerExecutePrompt(server: McpServer, services: TunnelService
           ? `\n\n提示：目标 session 可能正忙（mid-turn）。prompt 可能已成功注入，但响应等待超时。请用 read_session_log / list_io_records 检查 session 是否已开始处理。`
           : `\n\n提示：请确认 Kimi Server 正在运行（kimi web --no-open）且 session 可访问。`;
         return {
-          content: [
-            {
-              type: "text",
-              text: `执行失败: ${msg}${hint}`,
-            },
-          ],
+          content: [{ type: "text", text: `执行失败: ${msg}${hint}` }],
           isError: true,
         };
       }

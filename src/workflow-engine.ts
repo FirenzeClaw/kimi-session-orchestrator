@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { WorkflowProgress, IMemoryStore } from "./types.js";
-import { WireClient } from "./wire-client.js";
+import type { WorkflowProgress, IMemoryStore, IWireClient } from "./types.js";
 import type { MessageQueue } from "./message-queue.js";
 import type {
   WorkflowTemplate,
@@ -116,7 +115,7 @@ interface ActiveExecution {
 }
 
 export class WorkflowEngine {
-  private wireClient: WireClient;
+  private wireClient: IWireClient;
   private messageQueue: MessageQueue;
   private activeExecutions = new Map<string, ActiveExecution>();
   private memoryStore: IMemoryStore | null = null;
@@ -126,7 +125,7 @@ export class WorkflowEngine {
   private _fingerprintCache = new Map<string, Set<string>>();
   private _repeatCount = new Map<string, number>();
 
-  constructor(wireClient: WireClient, messageQueue: MessageQueue) {
+  constructor(wireClient: IWireClient, messageQueue: MessageQueue) {
     this.wireClient = wireClient;
     this.messageQueue = messageQueue;
   }
@@ -211,7 +210,7 @@ export class WorkflowEngine {
               const entries = this.memoryStore.get(ns);
               if (entries.some((e) => e.expired)) { hasExpired = true; break; }
             }
-            this.wireClient.setMemoryProfile(sessionId, {
+            this.memoryStore.setMemoryProfile(sessionId, {
               level: memory_level,
               cwd: template.projectCwd,
               fromSession: from_session,
@@ -367,7 +366,7 @@ export class WorkflowEngine {
         // Build effective instruction — inject shared memory on first step (SPEC 002)
         let instruction = step.instruction;
         if (stepIndex === 0 && this.memoryStore && this.tunnelProjectRoot) {
-          const profile = this.wireClient.getMemoryProfile(sessionId);
+          const profile = this.memoryStore.getMemoryProfile(sessionId);
           if (profile && profile.level !== "off") {
             try {
               const injection = this.memoryStore.buildInjection({

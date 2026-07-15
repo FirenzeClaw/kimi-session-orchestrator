@@ -14,7 +14,7 @@
  * Auto-detects python3 vs python for cross-platform compatibility.
  */
 
-import { detectKimiServerUrl } from "./wire-client.js";
+import { detectKimiServerUrl } from "./server-lock.js";
 
 export interface PollConfig {
   sessionId: string;

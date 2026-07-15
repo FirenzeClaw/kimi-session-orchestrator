@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { WireClient, detectKimiServerUrl } from "./wire-client.js";
+import { WireClient } from "./wire-client.js";
+import { detectKimiServerUrl } from "./server-lock.js";
 import { MessageQueue } from "./message-queue.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { PolicyEngine } from "./policy-engine.js";

@@ -332,7 +332,6 @@ cp -r skills/session-retire ~/.kimi-code/skills/session-retire
 | `/api/orchestrations` | GET | PM→子 session 编排关系列表 |
 | `/api/token` | GET | 获取 Kimi Server Token（仅限 localhost 访问） |
 | `/api/execute` | POST | 发送 prompt 并等待回复 |
-| `/api/send` | POST | 发送 prompt 并等待回复（与 /api/execute 相同机制） |
 | `/ws` | WebSocket | 实时双向通信 |
 
 ### 示例
@@ -370,8 +369,8 @@ src/
 ├── policy-builtins.ts           # read-only / safe-edit / full-access
 ├── policy-store.ts              # YAML 策略文件 CRUD
 ├── policy-engine.ts             # 策略解析/检查/绑定
-├── memory-store.ts              # SQLite 持久化 + buildInjection()
-├── memory-injector.ts           # 注入文本构建（thin wrapper）
+├── memory-store.ts              # SQLite 持久化 + buildInjection() + 记忆profiles
+├── server-lock.ts               # Kimi Server 端口自动检测（lock 文件解析）
 ├── tools/                       # 29 个 MCP 工具
 │   ├── create-session.ts        # + 编排追踪
 │   ├── run-flow.ts              # + 编排追踪

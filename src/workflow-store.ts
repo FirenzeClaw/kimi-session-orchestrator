@@ -1,5 +1,6 @@
 import { readFile, writeFile, unlink, readdir, stat, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
+import { load as parseYaml, dump as dumpYaml } from "js-yaml";
 import type { WorkflowTemplate } from "./workflow-template.js";
 import { parseTemplate } from "./workflow-template.js";
 
@@ -108,7 +109,12 @@ export async function saveTemplate(t: WorkflowTemplate): Promise<void> {
     updatedAt: now,
   };
 
-  const yaml = toYaml(template);
+  const yaml = dumpYaml(template, {
+    indent: 2,
+    lineWidth: 120,
+    noRefs: true,
+    forceQuotes: false,
+  });
   const targetPath = templatePath(t.name);
 
   // Ensure parent dir exists (for versioned paths this matters)
@@ -144,79 +150,3 @@ export async function deleteTemplate(name: string, version?: string): Promise<bo
   }
 }
 
-// ── YAML serializer (minimal, avoids dependency on js-yaml dump) ─────────────────
-
-function toYaml(template: WorkflowTemplate): string {
-  const lines: string[] = [
-    `# Workflow Template: ${template.name}`,
-    `# Version: ${template.version}`,
-    `# Generated: ${new Date().toISOString()}`,
-    "",
-    `name: "${escapeYaml(template.name)}"`,
-    `version: "${escapeYaml(template.version)}"`,
-    `projectCwd: "${escapeYaml(template.projectCwd)}"`,
-    `description: "${escapeYaml(template.description || "")}"`,
-  ];
-
-  if (template.specDocs.length > 0) {
-    lines.push("specDocs:");
-    for (const doc of template.specDocs) {
-      lines.push(`  - "${escapeYaml(doc)}"`);
-    }
-  } else {
-    lines.push("specDocs: []");
-  }
-
-  lines.push("");
-  lines.push("steps:");
-
-  for (const step of template.steps) {
-    lines.push(`  - id: "${escapeYaml(step.id)}"`);
-    // instruction may contain special chars; wrap in quotes and escape
-    lines.push(`    instruction: "${escapeYaml(step.instruction)}"`);
-    if (step.expectedOutcome) {
-      lines.push(`    expectedOutcome: "${escapeYaml(step.expectedOutcome)}"`);
-    }
-    if (step.maxRetries !== undefined) {
-      lines.push(`    maxRetries: ${step.maxRetries}`);
-    }
-  }
-
-  lines.push("");
-  lines.push("blockagePolicy:");
-  lines.push("  autoResolve:");
-  if (template.blockagePolicy.autoResolve.length > 0) {
-    for (const bt of template.blockagePolicy.autoResolve) {
-      lines.push(`    - ${bt}`);
-    }
-  } else {
-    lines.push("    []");
-  }
-  lines.push(`  maxRetriesPerStep: ${template.blockagePolicy.maxRetriesPerStep}`);
-
-  lines.push("");
-  lines.push("timeout:");
-  lines.push(`  perStep: ${template.timeout.perStep}`);
-  lines.push(`  total: ${template.timeout.total}`);
-
-  if (template.createdAt) {
-    lines.push("");
-    lines.push(`createdAt: "${template.createdAt}"`);
-  }
-  if (template.updatedAt) {
-    lines.push(`updatedAt: "${template.updatedAt}"`);
-  }
-
-  return lines.join("\n") + "\n";
-}
-
-function escapeYaml(s: string): string {
-  // Escape backslash first, then double-quote, then other YAML-sensitive characters
-  return s
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r");
-  // For bare values containing ": " or " #", the caller wraps them in quotes, so
-  // these don't need additional escaping.
-}

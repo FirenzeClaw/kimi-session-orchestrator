@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TunnelServices } from "../types.js";
+import { ensureConnected } from "./helpers.js";
 
 export function registerCreateSession(server: McpServer, services: TunnelServices): void {
   const { wireClient, orchestrationStore } = services;
@@ -44,20 +45,11 @@ export function registerCreateSession(server: McpServer, services: TunnelService
         .describe("接续的前置 session ID，自动拉取其 handoff 交接信息注入到首条 prompt。"),
     },
     async ({ cwd, title, permission_mode, model, thinking, policy, memory_level, from_session }) => {
-      if (!wireClient.isConnected()) {
-        try {
-          await wireClient.connect();
-        } catch {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open",
-              },
-            ],
-            isError: true,
-          };
-        }
+      if (!(await ensureConnected(services))) {
+        return {
+          content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open" }],
+          isError: true,
+        };
       }
 
       try {
@@ -104,7 +96,7 @@ export function registerCreateSession(server: McpServer, services: TunnelService
               const entries = services.memoryStore.get(ns);
               if (entries.some((e) => e.expired)) { hasExpired = true; break; }
             }
-            wireClient.setMemoryProfile(result.sessionId, {
+            services.memoryStore.setMemoryProfile(result.sessionId, {
               level: memory_level,
               cwd,
               fromSession: from_session,

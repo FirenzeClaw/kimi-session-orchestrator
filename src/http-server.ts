@@ -70,19 +70,6 @@ export function startHttpServer(port: number, services: TunnelServices): void {
     }
   });
 
-  // REST API: simple send (queues to existing poll system for backwards compat)
-  app.post("/api/send", (req, res) => {
-    const { content, sessionId } = req.body;
-
-    if (!content || typeof content !== "string") {
-      res.status(400).json({ error: "Missing or invalid 'content' field" });
-      return;
-    }
-
-    const msg = { id: randomUUID(), content, timestamp: new Date().toISOString(), sessionId };
-    res.json({ success: true, messageId: msg.id });
-  });
-
   // REST API: tunnel status (now includes wire client status)
   app.get("/api/status", (_req, res) => {
     res.json({

@@ -1,8 +1,64 @@
-import type { WireClient } from "./wire-client.js";
 import type { MessageQueue } from "./message-queue.js";
 import type { WorkflowResult, BlockageEvent } from "./workflow-template.js";
 import type { IPolicyEngine } from "./policy-engine.js";
 import type { OrchestrationStore } from "./orchestration-store.js";
+import type {
+  KimiContentBlock,
+  TurnPromptResponse,
+  CreateSessionOptions,
+} from "./wire-client.js";
+
+// === Wire Client Interface (v2.10 — extracted from WireClient for testability) ===
+
+export interface IWireClient {
+  // Connection
+  isConnected(): boolean;
+  isWsConnected(): boolean;
+  connect(): Promise<void>;
+  close(): Promise<void>;
+  startHealthCheck(): void;
+
+  // Session management
+  getSessionId(): string;
+  setSessionId(id: string): void;
+  createSession(opts: CreateSessionOptions): Promise<{ sessionId: string; title: string }>;
+
+  // Prompt submission
+  submitPrompt(
+    prompt: string,
+    opts?: { autoApprove?: boolean }
+  ): Promise<{ promptId: string }>;
+  sendPrompt(
+    prompt: string,
+    opts?: {
+      timeoutMs?: number;
+      includeThinking?: boolean;
+      autoApprove?: boolean;
+    }
+  ): Promise<TurnPromptResponse>;
+
+  // Status
+  getSessionStatus(): Promise<string>;
+  getCachedStatus(sessionId: string): string | null;
+
+  // Policy
+  setSessionPolicy(sessionId: string, policySpec: string, cwd?: string, boundBy?: string): void;
+
+  // REST access (used by SessionWatcher, WorkflowEngine for message fetching)
+  apiGet<T>(path: string): Promise<T>;
+  apiPost<T>(path: string, body: unknown): Promise<T>;
+
+  // Utility
+  getThinkingFromMessages(messages: KimiContentBlock[]): string;
+  filterTextOnly(messages: KimiContentBlock[]): KimiContentBlock[];
+
+  // Dependency injection
+  setMessageQueue(mq: MessageQueue): void;
+  setPolicyEngine(pe: IPolicyEngine): void;
+  setWatchOutput(path: string): void;
+}
+
+// === Workflow Types ===
 
 export interface WorkflowProgress {
   template: string;
@@ -66,13 +122,17 @@ export interface IMemoryStore {
   };
   archive(sessionId: string, targetNs?: string, keys?: string[]): { archived: number; source: string; target: string };
   buildInjection(profile: InjectionProfile): string;
+  /** Store memory injection profile for a session (v2.10: moved from WireClient). */
+  setMemoryProfile(sessionId: string, profile: { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean }): void;
+  /** Retrieve memory injection profile for a session (v2.10: moved from WireClient). */
+  getMemoryProfile(sessionId: string): { level: string; cwd: string; fromSession?: string; hasExpiredEntries?: boolean } | null;
   close(): void;
 }
 
 // === Tunnel Services ===
 
 export interface TunnelServices {
-  wireClient: WireClient;
+  wireClient: IWireClient;
   messageQueue: MessageQueue;
   startTime: number;
   workflowEngine?: IWorkflowEngine;

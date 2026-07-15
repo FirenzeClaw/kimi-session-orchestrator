@@ -2,12 +2,11 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TunnelServices } from "../types.js";
 import { generatePollCommand } from "../poll-command.js";
+import { preparePrompt, ensureConnected } from "./helpers.js";
 
 /**
- * Legacy tool — now delegates to execute_prompt.
- * The original multi-turn orchestration (orchestrateTask) was removed when MCP timeout
- * constraints forced fire-and-forget; chat_with_session is now equivalent to
- * execute_prompt(wait=false, auto_mode=...).
+ * Delegates to the same fire-and-forget pattern as execute_prompt.
+ * Both tools share the same helpers — no duplicated logic.
  */
 export function registerChatWithSession(server: McpServer, services: TunnelServices): void {
   const { wireClient } = services;
@@ -22,45 +21,21 @@ export function registerChatWithSession(server: McpServer, services: TunnelServi
       skip_memory: z.boolean().default(false).describe("跳过共享内存上下文注入（SPEC 002）。"),
     },
     async ({ session_id, task, auto_mode, policy, skip_memory }) => {
-      if (!wireClient.isConnected()) {
-        try { await wireClient.connect(); } catch {
-          return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open" }], isError: true };
-        }
+      if (!(await ensureConnected(services))) {
+        return { content: [{ type: "text", text: "Wire client 未连接到 Kimi Server。请先启动: kimi web --no-open" }], isError: true };
       }
 
       wireClient.setSessionId(session_id);
 
-      // Bind policy if specified
-      if (policy) {
-        try { wireClient.setSessionPolicy(session_id, policy); } catch { /* non-fatal */ }
-      }
-
-      // Bind memory injection context (SPEC 002)
-      let effectiveTask = task;
-      if (!skip_memory && services.memoryStore && services.tunnelProjectRoot) {
-        const profile = wireClient.getMemoryProfile(session_id);
-        if (profile && profile.level !== "off") {
-          try {
-            services.memoryStore.ensureDb(services.tunnelProjectRoot);
-            const injection = services.memoryStore.buildInjection({
-                level: profile.level as "off" | "minimal" | "standard" | "full",
-                maxBytes: 8192,
-                fromSession: profile.fromSession,
-                cwd: profile.cwd,
-                hasExpiredEntries: profile.hasExpiredEntries,
-              });
-              if (injection) {
-                const warning = profile.hasExpiredEntries
-                  ? "⚠️ 警告: 以下注入的部分条目已被 PM 标记为过期，内容可能不是最新。\n\n"
-                  : "";
-                effectiveTask = `${warning}${injection}\n\n---\n\n${task}`;
-              }
-          } catch { /* non-fatal */ }
-        }
-      }
+      const effectivePrompt = preparePrompt(services, {
+        sessionId: session_id,
+        prompt: task,
+        skipMemory: skip_memory,
+        policy,
+      });
 
       try {
-        const { promptId } = await wireClient.submitPrompt(effectiveTask, { autoApprove: auto_mode });
+        const { promptId } = await wireClient.submitPrompt(effectivePrompt, { autoApprove: auto_mode });
         return {
           content: [{ type: "text", text: JSON.stringify({
             submitted: true, session_id, prompt_id: promptId,
