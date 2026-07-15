@@ -347,17 +347,34 @@ export class MemoryStore implements IMemoryStore {
       totalEntries += keys.length;
     }
 
-    // --- Empty guard ---
-    if (totalEntries === 0) {
+    // --- Handoff from fromSession (collect BEFORE empty guard) ---
+    // Bug fix: handoff entries must be collected before the empty guard,
+    // otherwise they are silently discarded when project-level namespaces
+    // (e.g. project/meta) have no entries yet — a common case for new projects.
+    let handoffBlock = "";
+    if (profile.fromSession) {
+      const handoffEntries = this.get(`session/${profile.fromSession}/handoff`);
+      if (handoffEntries.length > 0) {
+        handoffBlock = "\n\n## 前置结论\n\n" + handoffEntries
+          .map((e) => `- **${e.key}**: ${e.value}`)
+          .join("\n");
+      }
+    }
+
+    // --- Empty guard (consider both project entries AND handoff) ---
+    if (totalEntries === 0 && !handoffBlock) {
       return "[系统注入] 你是任务 session。当前无共享记忆条目。";
     }
 
     // --- Build output per level ---
     let output = "";
-
     const rolePrefix = "[系统注入] 你是任务 session。";
 
-    if (profile.level === "minimal") {
+    if (totalEntries === 0 && handoffBlock) {
+      // Handoff-only: project knowledge base is empty, but predecessor session
+      // left structured handoff data. Present it directly.
+      output = `${rolePrefix} 项目知识库尚未建立，但有前置 session 交接信息可用。${handoffBlock}`;
+    } else if (profile.level === "minimal") {
       // FR-1 minimal: single instruction
       output = `${rolePrefix} 使用 memory_get(namespace="project/meta") 读取项目背景后开始工作。`;
     } else if (profile.level === "standard") {
@@ -398,19 +415,13 @@ export class MemoryStore implements IMemoryStore {
       output = lines.join("\n");
     }
 
-    // --- Handoff from fromSession (keep existing logic) ---
-    if (profile.fromSession) {
-      const handoffEntries = this.get(`session/${profile.fromSession}/handoff`);
-      if (handoffEntries.length > 0) {
-        const handoffText = handoffEntries
-          .map((e) => `- **${e.key}**: ${e.value}`)
-          .join("\n");
-        const handoffBlock = `\n\n## 前置结论\n\n${handoffText}`;
-        const outputBytes = Buffer.byteLength(output, "utf-8");
-        const handoffBytes = Buffer.byteLength(handoffBlock, "utf-8");
-        if (outputBytes + handoffBytes <= maxBytes) {
-          output += handoffBlock;
-        }
+    // --- Append handoff block (for the normal path where project entries exist) ---
+    // The handoff-only path above already includes handoffBlock in output.
+    if (handoffBlock && totalEntries > 0) {
+      const outputBytes = Buffer.byteLength(output, "utf-8");
+      const handoffBytes = Buffer.byteLength(handoffBlock, "utf-8");
+      if (outputBytes + handoffBytes <= maxBytes) {
+        output += handoffBlock;
       }
     }
 
