@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.8-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.8.5-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-28-orange)]()
 
@@ -378,6 +378,8 @@ skills/                          # 配套 Skill（6 个）
 
 > **v2.7 变更**：`src/public/console.html` 和 `workflow-console.html` 已移除。监控 UI 迁移至浏览器扩展 + JS 脚本插件，直接注入 Kimi Web UI 侧边栏。新增 `session-retire` skill——退役→接班自动化 pipeline（memory_archive + 7-block 模板 + 新 session 启动自举协议）。
 >
+> **v2.8.5 修复**：`buildInjection()` 空守卫在 project 知识库为空时过早返回，截断 `fromSession` handoff 注入——`session-retire` 交接数据被静默丢弃。修复：handoff 提前收集 + 联合判空 + handoff-only 分支 + 去重。
+>
 > **v2.8 变更**：`buildInjection()` 注入文本 `memory_get("ns")` → `memory_get(namespace="ns")`——消除工具名歧义；REST API 端点删过时补漏（移除已删除的 `/` 和 `/workflow-console.html`，补充 `/api/orchestrations`、`/api/token`）；新增"更新工具"章节；全文档过时内容清理。
 
 ## 共享记忆系统（v2.5+）
@@ -573,6 +575,7 @@ npm start
 
 | 日期 | 版本 | 变更 |
 |------|:--:|------|
+| 2026-07-15 | v2.8.5 | **修复 `fromSession` handoff 注入被空守卫截断**（`memory-store.ts` `buildInjection()`）：project 知识库为空时提前返回 "无共享记忆条目"，导致 `session-retire` 写入的 handoff 数据（completed/pending/decisions）被静默丢弃，新 session 仅收到 7-block 模板文本。修复后 handoff 收集提前到空守卫之前，联合判空，新增 handoff-only 分支，去重 DB 查询。`agent-tool-reliability` 项目实测验证 |
 | 2026-07-14 | v2.8.4 | poll_command `fetch_result` 彻底修复：curl 管道截断 → Python `urllib` 直连 HTTP；`2>/dev/null` 移除（错误不再静默吞）；Windows GBK emoji 乱码 → `PYTHONIOENCODING=utf-8` |
 | 2026-07-14 | v2.8.3 | `detectKimiServerUrl()` 过期 lock 自动清理——PID 活性检测 + 自动删 lock + `connect()` 重连前 URL 重新检测 |
 | 2026-07-12 | v2.8.1 | "更新工具"章节补全：新增更新前检查（kimi web 运行 + token 校验）+ 孤儿进程清理 + `/reload` 原理说明；本机实测确认 kimi web 未运行是 ECONNREFUSED 最常见根因 |
