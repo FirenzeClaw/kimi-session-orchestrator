@@ -175,6 +175,7 @@ Q3 并行度:
 |------|------|------|
 | `src/tools/grade-step.ts` | 新 MCP 工具 | ~35 |
 | `src/mcp-server.ts` | 注册 `grade_step` | +4 |
+| `src/workflow-template.ts` | `BlockageTypeEnum` 追加 `"loop_detected"` | +3 |
 | `src/workflow-engine.ts` | `ActiveExecution` 加 `lastFingerprints`，`driveStep()` 中加指纹比对 | +20 |
 
 ### 6.1 grade_step 工具定义
@@ -199,19 +200,19 @@ grade_step(
 ### 6.2 Loop 指纹检测（workflow-engine 内部）
 
 `driveStep()` 每轮执行后：
-1. 从 `response.messages` 中提取 `tool_use` 块 → `tool_name + args_hash`
+1. 从 `response.messages` 中提取 `tool_use` 块 → `tool_name + JSON.stringify(input).slice(0,80)` 哈希
 2. 与 `ActiveExecution.lastFingerprints` 比对
-3. 连续 3 轮完全相同 → 标记 `loop_detected` blockage
+3. 连续 3 轮完全相同 → 生成 `loop_detected` blockage（需 `BlockageTypeEnum` 追加 `"loop_detected"`）
 4. 每轮更新 `lastFingerprints`
 
-**PM 层无感知**——堵住后 workflow-engine 自动暂停等待 `continue_workflow` 决策，与现有 blockage 处理流程完全一致。
+**PM 层无感知**——堵住后 workflow-engine 自动暂停等待 `continue_workflow` 决策，与现有 blockage 处理流程（重试/跳过/终止）完全一致，不需要 PM 学新操作。
 
 ## 7. 不改的内容
 
 | 不碰 | 原因 |
 |------|------|
 | `wire-client.ts` | sendPrompt/setSessionId/createSession 已满足所有需求 |
-| `workflow-template.ts` | 模板 schema 不变，不新增 YAML 字段 |
+| `workflow-template.ts`（YAML schema 部分） | `WorkflowStepSchema` 不新增字段，模板结构不变 |
 | `guide-orchestration.md` | Loop guide 通过交叉引用（"见 guide-orchestration §X"）引用共享规范 |
 | `guide-planning.md` / `guide-execute.md` | 职责独立，不变 |
 | L3 Event-driven / L4 Hill Climbing | 不属于 guide-driven PM 操作模式——这些适合全自动运行层，不在本设计范围 |
