@@ -27,6 +27,7 @@ import { registerMemoryList } from "./tools/memory-list.js";
 import { registerMemoryDelete } from "./tools/memory-delete.js";
 import { registerMemoryStatus } from "./tools/memory-status.js";
 import { registerMemoryArchive } from "./tools/memory-archive.js";
+import { registerGradeStep } from "./tools/grade-step.js";
 
 export async function startMcpServer(services: TunnelServices): Promise<void> {
   const server = new McpServer({
@@ -71,6 +72,9 @@ export async function startMcpServer(services: TunnelServices): Promise<void> {
   registerMemoryDelete(server, services);
   registerMemoryStatus(server, services);
   registerMemoryArchive(server, services);
+
+  // Grading & verification tool
+  registerGradeStep(server, services);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
