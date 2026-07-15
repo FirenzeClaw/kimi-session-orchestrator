@@ -49,44 +49,44 @@ async function main(): Promise<void> {
   // Start HTTP + WebSocket server for external clients
   startHttpServer(PORT, services);
 
-  // Connect to Kimi server via REST API
-  try {
-    await wireClient.connect();
-
-    // Auto-detect the most recent session
-    if (!wireClient.getSessionId()) {
-      const sessions = await listSessions();
-      if (sessions.length > 0) {
-        wireClient.setSessionId(sessions[0].id);
-        process.stderr.write(
-          `[kimi-session-orchestrator] Auto-selected session: ${sessions[0].id} (${sessions[0].title.slice(0, 50)})\n`
-        );
-      }
-    }
-  } catch (err) {
-    process.stderr.write(
-      `[kimi-session-orchestrator] WARNING: Kimi server not available at ${process.env.KIMI_SERVER_URL || detectKimiServerUrl()}: ${(err as Error).message}\n`
-    );
-    process.stderr.write(
-      "[kimi-session-orchestrator] Start with: kimi web --no-open\n"
-    );
-    process.stderr.write(
-      "[kimi-session-orchestrator] Set KIMI_SERVER_TOKEN env var if auth required\n"
-    );
-    process.stderr.write(
-      "[kimi-session-orchestrator] Starting periodic reconnection (every 10s). Tools will auto-retry.\n"
-    );
-    // Start periodic reconnection — health check will keep retrying connect()
-    wireClient.startHealthCheck();
-  }
-
-  // Start MCP stdio server for Kimi Code CLI
+  // Start MCP stdio server FIRST — must respond to tools/list within 30s
+  // regardless of wire connection status (P1-3 fix: decouple stdio from wire lifecycle)
   startMcpServer(services).catch((err) => {
     process.stderr.write(
       `[kimi-session-orchestrator] MCP server failed: ${err.message}\n`
     );
     process.exit(1);
   });
+
+  // Wire connection runs as background task — doesn't block MCP stdio
+  wireClient.connect()
+    .then(async () => {
+      // Auto-detect the most recent session after successful connect
+      if (!wireClient.getSessionId()) {
+        const sessions = await listSessions();
+        if (sessions.length > 0) {
+          wireClient.setSessionId(sessions[0].id);
+          process.stderr.write(
+            `[kimi-session-orchestrator] Auto-selected session: ${sessions[0].id} (${sessions[0].title.slice(0, 50)})\n`
+          );
+        }
+      }
+    })
+    .catch((err) => {
+      process.stderr.write(
+        `[kimi-session-orchestrator] WARNING: Kimi server not available at ${process.env.KIMI_SERVER_URL || detectKimiServerUrl()}: ${(err as Error).message}\n`
+      );
+      process.stderr.write(
+        "[kimi-session-orchestrator] Start with: kimi web --no-open\n"
+      );
+      process.stderr.write(
+        "[kimi-session-orchestrator] Set KIMI_SERVER_TOKEN env var if auth required\n"
+      );
+      process.stderr.write(
+        "[kimi-session-orchestrator] Starting periodic reconnection (every 10s). Tools will auto-retry.\n"
+      );
+      wireClient.startHealthCheck();
+    });
 
   // Graceful shutdown
   const shutdown = async () => {

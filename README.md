@@ -607,6 +607,7 @@ npm start
 
 | 日期 | 版本 | 变更 |
 |------|:--:|------|
+| 2026-07-15 | v2.9.1 | **grade_step 两项修复**：① 评分前拉取目标 session IO 产出（修复 grader 无数据评分）；② JSON 截断容错——正则 fallback 提取 pass/score（修复反馈过长→score=0 误报）。**MCP stdio 优先启动**：`startMcpServer` 移至 `wireClient.connect` 之前，connect 改为后台异步（修复 Kimi Server 离线时 MCP 进程假死）。并行 Loop demo 验证通过 |
 | 2026-07-15 | v2.9.0 | **Loop Engineering 验证闭环**——Q1 A入口 + 7分层guide + `grade_step` LLM评分工具 + loop指纹检测。PM 可选实施/验收模式、单/并行策略，guide 按需加载节省56-60% token |
 | 2026-07-15 | v2.8.5 | **修复 `fromSession` handoff 注入被空守卫截断**（`memory-store.ts` `buildInjection()`）：project 知识库为空时提前返回 "无共享记忆条目"，导致 `session-retire` 写入的 handoff 数据（completed/pending/decisions）被静默丢弃，新 session 仅收到 7-block 模板文本。修复后 handoff 收集提前到空守卫之前，联合判空，新增 handoff-only 分支，去重 DB 查询。`agent-tool-reliability` 项目实测验证 |
 | 2026-07-14 | v2.8.4 | poll_command `fetch_result` 彻底修复：curl 管道截断 → Python `urllib` 直连 HTTP；`2>/dev/null` 移除（错误不再静默吞）；Windows GBK emoji 乱码 → `PYTHONIOENCODING=utf-8` |

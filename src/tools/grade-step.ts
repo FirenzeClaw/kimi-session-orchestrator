@@ -77,13 +77,21 @@ ${focusHint}`;
             }],
           };
         } catch {
+          // JSON 解析失败（常见于 grader 反馈过长导致 finalText 截断）
+          // 用正则 fallback 从截断文本中提取关键字段
+          const passMatch = response.finalText.match(/"pass"\s*:\s*(true|false)/);
+          const scoreMatch = response.finalText.match(/"score"\s*:\s*(\d+)/);
+          const feedbackMatch = response.finalText.match(/"feedback"\s*:\s*"([^"]*)/);
+          const pass = passMatch ? passMatch[1] === "true" : false;
+          const score = scoreMatch ? Number(scoreMatch[1]) : 0;
+          const feedback = (feedbackMatch ? feedbackMatch[1] + "…(截断)" : "") || response.finalText.slice(0, 200);
           return {
             content: [{
               type: "text",
               text: JSON.stringify({
-                pass: false,
-                score: 0,
-                feedback: "grader JSON 解析失败，原始响应: " + response.finalText.slice(0, 200),
+                pass,
+                score,
+                feedback,
                 session_id,
               }, null, 2),
             }],

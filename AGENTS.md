@@ -1,5 +1,7 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-15 | kimi-code (fix) | grade_step 修复：① listIORecords 拉取目标 session 产出再评分（修复 grader 无数据评分 bug）；② JSON 截断容错——catch 分支正则 fallback 提取 pass/score（修复 grader 反馈过长→score=0 误报）
+  2026-07-15 | kimi-code (arch) | MCP stdio 优先启动：startMcpServer 移到 wireClient.connect 之前，connect 改为后台异步——修复 Kimi Server 离线时 MCP 进程假死（connect 阻塞 63s→stdio 未就绪→tools/list 超时）
   2026-07-15 | kimi-code (v2.9) | Loop Engineering 验证闭环：Q1 A入口 + 7分层guide + grade_step LLM评分工具 + loop指纹检测（workflow-engine自动blockage）；export KimiContentBlock；BlockageTypeEnum 追加 loop_detected
   2026-07-14 | kimi-code (arch) | 移除 approveAll 自动审批引擎：manual session 审批→Bash回调→PM手动决策；auto session 继承 permission_mode 零审批；deny_tool 重写支持 approval_id；approve_tool scope=session 修复
   2026-07-14 | kimi-code (fix) | poll_command fetch_result 彻底修复：curl 管道截断 → Python urllib 直连 HTTP；移除 2>/dev/null 静默吞错；Windows GBK emoji 乱码 → PYTHONIOENCODING=utf-8
@@ -254,6 +256,8 @@ manual session 的工具调用由 PM 手动决策，流程：
 | `docs/issues/memory-init-timing.md` | [FIXED] MemoryStore 启动时 ensureDb 缺失导致管理工具无法独立使用 |
 | `docs/issues/memory-cross-project-injection.md` | [FIXED] 跨项目 resolveProjectRoot 静默跳过 → 注入失效 |
 | `docs/issues/ubuntu-wire-client-startup.md` | [FIXED] Ubuntu Wire Client 启动时序——指数退避 + 定时重连；Linux 仍需 `--port 5494` |
+| `docs/issues/grade-step-empty-response.md` | [FIXED] grade_step 两项修复：grader 无数据评分 + JSON 截断容错 |
+| `docs/issues/mcp-wire-offline-freeze.md` | [FIXED] MCP 进程在 Kimi Server 离线时假死——stdio 优先启动 |
 | `specs/004-memory-lazy-inject/` | [DONE] 记忆注入策略升级——全量预载 → 索引+按需自读（minimal/standard/full 三级格式） |
 | `specs/005-web-ui-extension/` | 浏览器扩展+JS脚本双版本——废弃独立HTML监控，注入Kimi Web UI侧边栏 |
 
