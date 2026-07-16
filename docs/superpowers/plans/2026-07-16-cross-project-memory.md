@@ -33,6 +33,21 @@
 
 **涉及改动：**
 
+以下为 `buildInjection` 的完整合并结构，步骤 1-4 分别对应各段：
+
+```
+buildInjection(profile):
+  ① 现有：收集全局层条目 + fromSession handoff（globalEntries, totalEntries, handoffBlock）
+  ② 新增：若 profile.cwd → resolveProjectRoot → 不同根 → 切换 DB → 收集本地层条目 → 生成 localBlock → 切回 tunnel DB
+  ③ 新增空守卫（按优先级）：
+     a. totalEntries===0 && !handoffBlock && !localBlock → return "无共享记忆"
+     b. totalEntries===0 && !handoffBlock && localBlock → return rolePrefix + localBlock
+     c. 其余 → 进入现有分支
+  ④ 现有分支：handoff-only / minimal / standard / full（添加条件 globalHeader）
+  ⑤ 现有：追加 handoffBlock（totalEntries>0 时）
+  ⑥ 新增：追加 localBlock（检查 maxBytes 限制，超限则截断提示）
+```
+
 - [ ] **步骤 1：提取全局层收集 + handoff 为独立变量，新增本地层逻辑**
 
 在当前 `buildInjection` 中，全局层 collect（行 338-350）和 handoff（行 357-364）保持不变，之后新增：
@@ -97,11 +112,12 @@ if (profile.cwd) {
 
 - [ ] **步骤 2：修改全局层 `minimal` / `standard` / `full` 输出格式**
 
-全局层（planning-hub 记忆）改为以 "## 全局上下文（来自 planning-hub）" 开头：
+全局层仅在存在本地层时才加 "## 全局上下文" 标签，单项目场景（cwd == tunnelRoot）保持原格式不变：
 
 ```typescript
-// 全局层前缀
-const globalHeader = totalEntries > 0 ? "## 全局上下文\n\n" : "";
+// 仅双层场景添加全局上下文标签
+const isDualLayer = localBlock !== "";
+const globalHeader = isDualLayer && totalEntries > 0 ? "## 全局上下文\n\n" : "";
 
 // minimal 路径：
 output = `${rolePrefix}${globalHeader}使用 memory_get(namespace="project/meta") 读取项目背景后开始工作。`;
@@ -112,6 +128,8 @@ output = `${rolePrefix}${globalHeader}使用 memory_get 按需读取：\n\n` + b
 // full 路径：
 output = `${rolePrefix}${globalHeader}以下记忆条目可用，请用 memory_get 按需读取：\n\n|...`;
 ```
+
+> **注意**：minimal 级别下全局层不指明 project 参数（走 tunnel DB），本地层索引用完整 `project="..."` 格式，task session 按需分别读取两面记忆。
 
 - [ ] **步骤 3：在输出末尾追加本地层**
 
@@ -210,15 +228,18 @@ if (project) {
 
 - [ ] **步骤 3-8：对 6 个文件重复上述两步**
 
-逐一修改：
-- `src/tools/memory-get.ts` — 行 15 (handler 参数) + 行 17-21 之间插入路由
-- `src/tools/memory-set.ts` — 行 17 (handler 参数) + 行 18-24 之间
-- `src/tools/memory-list.ts` — 行 13 (handler 参数) + 行 13-22 之间
-- `src/tools/memory-delete.ts` — 行 14 (handler 参数) + 行 14-22 之间
-- `src/tools/memory-status.ts` — 行 10 (handler 参数) + 行 10-18 之间
-- `src/tools/memory-archive.ts` — 行 15 (handler 参数) + 行 15-24 之间
+通用锚点：① handler 参数解构处加 `project` 字段 ② `if (!memoryStore)` 检查之后、业务逻辑之前插入路由。memory-set.ts 的 5 个验证步骤在 `if(!memoryStore)` 和 `try` 之间，路由逻辑插在验证之前（即 `if(!memoryStore)` 块结束后紧接）。
 
-**注意** `memory-status.ts` 和 `memory-archive.ts` 没有 zod 验证参数，需完整添加 `project` zod 声明。
+| 文件 | 加 project 参数位置 | 插路由位置 |
+|------|--------------------|-----------|
+| `memory-get.ts` | `include_expired` 后 | `if (!memoryStore)` 之后 |
+| `memory-set.ts` | `expire` 后 | `if (!memoryStore)` 之后、namespace 验证之前 |
+| `memory-list.ts` | `namespace` 后 | `if (!memoryStore)` 之后 |
+| `memory-delete.ts` | `key` 后 | `if (!memoryStore)` 之后 |
+| `memory-status.ts` | 当前为 `{}`，改为 `{ project: z.string()... }` | `if (!memoryStore)` 之后 |
+| `memory-archive.ts` | `keys` 后 | `if (!memoryStore)` 之后 |
+
+**注意** 仅 `memory-status.ts` 当前使用空 zod schema `{}`（无任何参数），需完整创建 `project` 参数声明。其余 5 个文件已有 zod 参数，仅需追加一行。
 
 - [ ] **步骤 9：编译验证**
 
