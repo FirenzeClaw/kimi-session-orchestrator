@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+cd "$(dirname "$0")"
+
+# Setup test directories
+mkdir -p planning-hub/.kimi-tunnel
+mkdir -p project-a/.kimi-tunnel
+
+PLANNING_HUB="$(pwd -W 2>/dev/null || pwd)/planning-hub"
+PROJECT_A="$(pwd -W 2>/dev/null || pwd)/project-a"
+
+echo "=== 跨项目记忆双层注入验证 ==="
+echo ""
+echo "1. 场景目录:"
+echo "   planning-hub: $PLANNING_HUB"
+echo "   project-a:    $PROJECT_A"
+echo ""
+echo "2. 启动 orchestrator 后，PM 通过 MCP 工具写入全局记忆:"
+echo "   memory_set(namespace='project/decisions', key='di_pattern', value='所有模块使用 DI 模式')"
+echo "   memory_set(namespace='project/learnings', key='server_oom', value='Kimi Server ~20h OOM')"
+echo ""
+echo "3. 写入 project-a 本地记忆:"
+echo "   memory_set(namespace='project/meta', key='tech_stack', value='React 18 + Vite 5', project='$PROJECT_A')"
+echo "   memory_set(namespace='project/meta', key='conventions', value='使用 Tailwind CSS', project='$PROJECT_A')"
+echo ""
+echo "4. 验证注入文本格式:"
+echo "   create_session(cwd='$PROJECT_A', memory_level='standard')"
+echo "   → 注入文本应包含："
+echo "     ## 全局上下文"
+echo "     - memory_get(namespace='project/decisions')"
+echo "     ---"
+echo "     以下记忆来自 $PROJECT_A"
+echo "     | project/meta | tech_stack, conventions | 必读 |"
+echo "     memory_get(namespace='project/meta', project='$PROJECT_A')"
+echo ""
+echo "5. 验证 project 参数路由:"
+echo "   memory_get(namespace='project/meta', project='$PROJECT_A') → 返回 project-a 条目"
+echo "   memory_get(namespace='project/meta') → 返回 planning-hub 条目（行为不变）"
+echo "   memory_get(namespace='project/meta', project='$PLANNING_HUB/no-kimi-tunnel') → 返回错误"
+echo ""
+echo "=== 验证清单 ==="
+echo "☐ 构建零错误 (npm run build)"
+echo "☐ 双层注入文本格式正确"
+echo "☐ project 参数路由正确"
+echo "☐ 不加 project 参数行为不变"
+echo "☐ 无 .kimi-tunnel/ 目录时返回友好错误"
