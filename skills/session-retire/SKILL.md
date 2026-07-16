@@ -39,7 +39,13 @@ description: Use when retiring a task session and spawning a successor with full
 
 ```
 ① get_session_info(session_id="<retiring_id>")
-   → 拿到 cwd, title, wirePath
+   → 拿到 title, wirePath。
+   ⚠️ workdir 字段是 Kimi Code 内部标识符（如 cli-research/2ffc9873b6c1），
+   不是绝对路径。不要用它作为 create_session 的 cwd。
+
+   通过以下方式确定cwd：
+   - 退役 session 正在做的任务——PM 已知项目路径，写入 Phase 3 的「项目路径」
+   - 或从 read_session_log 首条 user prompt 中提取（通常含工作目录）
 
 ② list_io_records(session_id="<retiring_id>", limit=15, max_content_length=3000)
    → 最近 15 轮 prompt↔回复，用于提取已完成/待办/决策
@@ -53,7 +59,7 @@ description: Use when retiring a task session and spawning a successor with full
    → 项目知识基线（新 session 也需要这些）
 ```
 
-**完成标准**：拿到 cwd + 最近对话摘要 + 项目知识基线（若可用）。4 个调用全部返回（含空）。
+**完成标准**：拿到绝对路径 cwd（非 workdir 标识符）+ 最近对话摘要 + 项目知识基线（若可用）。4 个调用全部返回（含空）。
 
 ### Phase 2 — 归档与持久化
 
@@ -118,6 +124,8 @@ description: Use when retiring a task session and spawning a successor with full
      prompt="<7-block 模板>
 
 ---
+⛔ 调用 memory_get 请使用 kimi-session-orchestrator MCP 工具（非 memory 知识图谱 MCP）。
+
 请先依次执行以下启动步骤以建立上下文基线：
 
 1. Read <cwd>/AGENTS.md

@@ -1,6 +1,7 @@
 # 实施循环 — 操作指南
 
 > 加载触发：Q2=I（实施循环）。从零构建，逐步产出，每步验证。
+> ⚠️ 工具调用失败时先执行 guide-loop-core.md §9 断连恢复流程。
 
 ---
 
@@ -13,14 +14,17 @@ create_session → step_1 → grade_step → pass? → step_2 → ... → delive
 
 ## §2 流程
 
+执行 guide-loop-core.md §3 协议，以下为实施场景的差异化步骤：
+
 ```
-create_session(cwd, permission_mode="auto")
-  → execute_prompt(sid, step_1, auto_mode=true)
-  → Bash(run_in_background=true) 后台轮询 → done
-  → PM grade_step
-    pass → execute_prompt(sid, step_2) ...
-    fail → execute_prompt(sid, 修复指令) → grade_step
-            ≤ 2 retry → 3rd fail → 阻塞干预
+STEP 1: create_session(cwd, permission_mode="auto")
+STEP 2: execute_prompt(sid, step_1, auto_mode=true)
+STEP 3: ⛔ Bash(run_in_background=true) 执行 poll_command → 确认 task_id
+STEP 5: 等待结果 → 拿到回复
+STEP 6: PM grade_step
+  pass → STEP 2（执行 next step）
+  fail → execute_prompt(sid, 修复指令) → STEP 3 → grade_step
+          ≤2 retry → 3rd fail → 阻塞干预
 ```
 
 ## §3 约束

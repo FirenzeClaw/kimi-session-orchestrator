@@ -27,4 +27,5 @@
 
 - `memory_set` 仅接受 `project/` 或 `session/` 前缀（代码强制）
 - `memory_get` namespace 无前缀限制（可读取任意 namespace）
+- **⛔ MCP 工具去歧义**：task session 通过 `create_session` 的 `memory_level` 自动注入时会带 kimi-session-orchestrator 前缀。若 PM 手工在 prompt 中写 `memory_get`，必须加前缀说明，否则 session 可能调错 MCP 服务器（`memory` 知识图谱 vs `kimi-session-orchestrator`）
 - 写入 `session/<sid>/findings` 后，交付时通过 `memory_archive(sid)` 自动提升为 `project/learnings`

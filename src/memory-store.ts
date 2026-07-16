@@ -370,7 +370,8 @@ export class MemoryStore implements IMemoryStore {
 
     // --- Build output per level ---
     let output = "";
-    const rolePrefix = "[系统注入] 你是任务 session。";
+    const disambig = "⛔ 调用 memory_get / memory_set 请使用 kimi-session-orchestrator MCP（非 memory 知识图谱 MCP）。\n\n";
+    const rolePrefix = `[系统注入] 你是任务 session。${disambig}`;
 
     if (totalEntries === 0 && handoffBlock) {
       // Handoff-only: project knowledge base is empty, but predecessor session

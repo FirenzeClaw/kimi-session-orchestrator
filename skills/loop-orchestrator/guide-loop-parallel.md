@@ -1,6 +1,7 @@
 # 多 Session 并行
 
 > 加载触发：Q3=P（并行策略）。多 session 同时推进独立模块。
+> ⚠️ 并行中若部分 session 工具调用失败 → 先执行 guide-loop-core.md §9 断连恢复，再逐个恢复 session 监控。
 
 ---
 
@@ -12,11 +13,14 @@
 
 ## §2 派发
 
+每个模块独立执行 guide-loop-core.md §3 STEP 1-4：
+
 ```
-create_session × N（每模块独立 session）
-  → execute_prompt × N（独立 criteria）
-  → Bash(run_in_background=true) × N（并行后台轮询）
-  → 先完成先审查，不必等全部
+STEP 1: create_session × N（每模块独立 session）
+STEP 2: execute_prompt × N（独立 criteria）
+STEP 3: ⛔ Bash(run_in_background=true) × N（独立后台任务）
+STEP 4: 确认全部 task_id 就位
+STEP 5: 先完成先审查，不必等全部
 ```
 
 ## §3 约束

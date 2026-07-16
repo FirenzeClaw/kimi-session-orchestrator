@@ -1,6 +1,7 @@
 # 交付与归档
 
 > 加载触发：阶段 5 交付时 Read。
+> ⚠️ memory_archive 调用失败时先执行 guide-loop-core.md §9 断连恢复流程。
 
 ---
 

@@ -1,6 +1,7 @@
 # 阻塞干预决策树
 
 > 加载条件：阶段 3 阻塞发生时 Read。
+> ⚠️ 诊断前先确认 wireConnected=true。若 false → 先执行 guide-loop-core.md §9 断连恢复。
 
 ---
 

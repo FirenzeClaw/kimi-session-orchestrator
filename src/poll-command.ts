@@ -33,7 +33,13 @@ export function generatePollCommand(config: PollConfig): string {
 
   return [
     `SID="${config.sessionId}"`,
-    `BASE="${baseUrl}"`,
+    `# 动态检测 Kimi Server 端口（每次轮询时读取 lock 文件，避免重启换端口后失效）`,
+    `PORT=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.kimi-code/server/lock','utf8')).port)}catch(e){console.log('')}" 2>/dev/null)`,
+    `if [ -z "$PORT" ]; then`,
+    `  echo "[LOCK_MISSING] Kimi Server lock 文件不存在或端口为空——Server 可能未启动"`,
+    `  exit 2`,
+    `fi`,
+    `BASE="http://127.0.0.1:$PORT"`,
     `MAX_SEC=${maxSeconds}`,
     `MAX_FAILS=${maxFails}`,
     `PY=$(which python3 2>/dev/null || which python 2>/dev/null || echo python)`,

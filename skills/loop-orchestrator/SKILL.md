@@ -67,21 +67,32 @@ description: 当需要进行多轮次自动循环编排（实施/验收闭环）
 | `poll_session` / `list_io_records` / `read_session_log` | Bash（文件操作/构建/测试/代码执行） |
 | `grade_step` / `memory_*` | 自行降级目标（绝对目标铁律） |
 | `approve_tool` / `deny_tool` | |
-| Bash（仅限：后台轮询 poll_command / 读日志） | |
+| Bash（仅限：后台轮询 poll_command / 读日志 / 读 output_path） | |
+| **⛔ 每次 execute_prompt 后必须立即 Bash(run_in_background=true) 执行 poll_command** | **跳过此步骤 = 流程违规，task session 回复永远丢失** |
 
 ---
 
 ## 核心铁律
 
-> 提交 prompt 后，必须 `Bash(run_in_background=true)` 后台轮询，绝不阻塞。
+> ⛔ **execute_prompt → 立即 Bash(run_in_background=true) → 确认 task_id。三步不可拆分、跳过、延迟。**
 
 | 规则 | 违反后果 |
 |------|----------|
+| **execute_prompt 后立即 Bash 后台轮询**（用 poll_command 原文） | 跳过 → task session 回复永远丢失 |
 | 即发即返，不阻塞 | MCP 超时截断 |
 | 后台 Bash 轮询 | 零 token 等待 |
 | 一个 execute_prompt 一个目标 | 多目标合一 → 注意力腐化 |
 | 跨模块必须分 session | 上下文污染 |
 | session 复用优先 | grade_step / 修复同 session 继续 |
+
+### 后台监控自检清单（每次 execute_prompt 后）
+
+| # | 检查项 | 失败处理 |
+|---|--------|----------|
+| 1 | execute_prompt 返回了 `poll_command`？ | 无 → 报错，不继续 |
+| 2 | `Bash(run_in_background=true)` 已调用？命令 = poll_command 原文 | 未调用 → 立即补 |
+| 3 | Bash 返回了 task_id？ | 无 → 重试 |
+| 4 | task_id 已关联 session_id 记录？ | 未记 → 立即记 |
 
 ---
 
@@ -94,6 +105,7 @@ description: 当需要进行多轮次自动循环编排（实施/验收闭环）
 5. create_session permission_mode="auto" 是 session 级别
 6. grade_step 不每次回复调用 — 仅在关键产出/修复后/交付前使用
 7. 用户中断时 — 立即 `memory_set(namespace="session/loop-<id>", key="progress", value="<progress JSON>")` 记录当前进度，再响应中断。不丢弃已完成工作。
+8. Kimi Server 断连 — 按 guide-loop-core.md §9 自主恢复，4 步完成：诊断 → 启动 → 等待重连 → 恢复状态
 
 ---
 
