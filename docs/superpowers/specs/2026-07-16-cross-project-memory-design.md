@@ -60,7 +60,7 @@ task session 首 turn 收到的注入内容将变成：
 
 ---
 
-以下记忆来自 D:/code/project-a，用 memory_get 按需读取：
+以下记忆来自 D:/code/project-a，用 memory_get 按需读取（项目路径为 resolveProjectRoot(cwd) 结果）：
 
 | 命名空间 | 条目 | 建议 |
 |---------|------|------|
@@ -75,15 +75,23 @@ task session 首 turn 收到的注入内容将变成：
 6 个 MCP 工具各加一个可选的 `project` 参数（string, absolute path）：
 
 ```typescript
-// 工具层：有 project → 先 ensureDb(project) 切换，再执行原逻辑
+// 工具 handler 内
+const { memoryStore, tunnelProjectRoot } = services;
+
 if (project) {
   const resolved = memoryStore.resolveProjectRoot(project);
-  if (resolved) memoryStore.ensureDb(resolved);
+  if (!resolved) {
+    return { content: [{ type: "text", text: `${project} 下未找到 .kimi-tunnel/ 目录` }], isError: true };
+  }
+  memoryStore.ensureDb(resolved);
+} else {
+  // ⛔ 必须显式恢复：上一次带 project 的调用可能已切换 DB
+  memoryStore.ensureDb(tunnelProjectRoot);
 }
-memoryStore.get(namespace, key, includeExpired);
+// ... 现有逻辑
 ```
 
-- 不加 `project`：行为不变，走当前 DB（tunnel 初始化时绑定的 planning-hub）
+- 不加 `project`：**显式 `ensureDb(tunnelProjectRoot)` 恢复默认 DB**，防止 DB 状态泄漏
 - `project="D:/code/project-a"`：orchestrator 自动解析 `.kimi-tunnel/` 并临时切换 DB
 - 解析失败：返回友好错误 `"D:/code/project-a 下未找到 .kimi-tunnel/ 目录"`
 
@@ -103,17 +111,23 @@ buildInjection 流程（原）:
 
 buildInjection 流程（新）:
   ① 收集 planning-hub 的命名空间条目 → 作为"全局上下文"正文写入
-  ② 若 profile.cwd != tunnelProjectRoot，解析子项目 DB → 收集条目 → 作为索引表写入
-  ③ 收集 fromSession handoff
+  ② 收集 fromSession handoff（必须在 DB 切换前，handoff 在 tunnel DB 中）
+  ③ 若 profile.cwd 解析后 ≠ tunnelProjectRoot：
+     a. resolveProjectRoot(profile.cwd) 解析子项目根目录
+     b. ensureDb(resolved) 切换 DB
+     c. 收集子项目条目（沿用 memory_level，格式固定为索引表）
+     d. ensureDb(tunnelProjectRoot) 切回 tunnel DB
   ④ 按 level 生成注入文本（全局正文 + 本地索引 + handoff）
 ```
 
 关键约束：
 - 全局层沿用现有 `level` 格式：minimal=单句指令, standard=bullet 列表, full=索引导航表（>20 条时 value 列折叠为 "(N 条)"）
-- 本地层始终用索引导航表格式（`| namespace | 条目 | 建议 |`），不受全局层 level 影响
+- 本地层沿用 `memory_level` 确定命名空间范围（minimal→仅 meta, standard→meta+decisions, full→全部），但**格式固定为索引导航表**（`| namespace | 条目 | 建议 |`）
+- 本地层注入标签使用 `resolveProjectRoot(cwd)` 的结果（而非原始 `profile.cwd`，后者可能是子目录）
 - 全局层正文 + 本地层索引总大小 ≤ `profile.maxBytes`（默认 8192），超限时优先保证全局层完整，本地层截断
 - 本地层无 `.kimi-tunnel/` 时静默跳过（不阻塞 session 创建）
-- `profile.cwd` 与 `tunnelProjectRoot` 指向同一目录时跳过本地层（避免重复注入）
+- `resolveProjectRoot(profile.cwd)` 与 `tunnelProjectRoot` 指向同一目录时跳过本地层（避免重复注入）
+- `buildInjection` 结束时 DB 必须切回 `tunnelProjectRoot`（防止 DB 状态泄漏到调用方）
 
 #### MemoryStore 新增辅助方法（可选）
 
@@ -179,6 +193,7 @@ if (project) {
 - `memory_status` 加 `project` 参数后只显示指定项目的状态，不显示跨项目聚合
 - 子项目无 `.kimi-tunnel/` 时不报错，静默跳过——task session 只收到全局层
 - 本地层条目超 `maxBytes` 限制时，全局层优先保证完整性，本地层可被截断
+- `setMemoryProfileWithExpiry` 的过期条目检查只覆盖 tunnel DB（全局层），不检查子项目 DB——子项目过期条目不会触发 "⚠️ 警告" 提示。影响较小，后续可补
 
 ## 5. 测试要点
 
