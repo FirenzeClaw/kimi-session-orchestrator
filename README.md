@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v2.16-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
+[![Python](https://img.shields.io/badge/python-%E2%89%A5%203.7-3776AB)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
 [![Skills](https://img.shields.io/badge/skills-7-blue)]()
 
@@ -38,6 +39,9 @@
 ```bash
 git clone https://github.com/FirenzeClaw/kimi-session-orchestrator.git
 cd kimi-session-orchestrator
+# 0. 确认 Python ≥ 3.7（后台轮询依赖）
+python3 --version || python --version
+
 npm install && npm run build
 
 # 1. 启动 Kimi Server
