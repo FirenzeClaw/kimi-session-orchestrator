@@ -2,6 +2,14 @@
 
 <!--
 修改记录:
+  2026-07-16 | kimi-code (v2.16) | poll.py 预置脚本 + 降级：execute_prompt 自动写入 poll.py → 短命令 ~100B；fetch_result 写入 poll-result-{sid}.txt 固定路径（PM Read 零 token）；路径规范化 \→/
+  2026-07-16 | kimi-code (v2.15) | poll_command Bash→Python 重写：消除 node 依赖 + LOCK_LOST 5×3s 重试 → exit 4 + 单进程修复子 shell 变量丢失；退出码协议 0/2/3/4；Python ≥ 3.7 运行时依赖
+  2026-07-16 | kimi-code (v2.14) | 上下文 Bash 监控：poll_command 新增 [CTX_HIGH] 三级阈值（环境变量 > ~/.kimi-tunnel/ctx-threshold > 36000）；逐条注入+session 复用规范收敛到 SKILL.md
+  2026-07-16 | kimi-code (v2.13) | 跨项目双层记忆注入：buildInjection() 按 profile.cwd 生成全局正文 + 子项目索引导航；6 个 memory_* MCP 工具 project 参数路由
+  2026-07-15 | kimi-code (v2.12) | Loop Orchestrator v2：独立 skill（9 文件，6 阶段执行循环）；主 skill Q1 移除 Loop 入口
+  2026-07-15 | kimi-code (v2.11) | 架构深化：IWireClient → ISessionClient/IStatusClient/IPushClient 三接口拆分；消除 ambient sessionId 竞态（8 个 save/restore 块删除）
+  2026-07-15 | kimi-code (v2.10) | 架构深化：WireClient 上帝类拆分 + server-lock.ts；tools/helpers.ts 消除 4×重复样板；/api/send 死端点移除
+  2026-07-15 | kimi-code (v2.9) | Loop Engineering 验证闭环：grade_step LLM 评分工具 + loop 指纹检测；MCP stdio 优先启动修复 Kimi Server 离线假死
   2026-07-11 | kimi-code (v2.8) | Skill 拆分加载：SKILL.md 222→64行，新增 guide-planning/orchestration/execute 按维度加载，token 节省 65-94%；coordinator-guide 从 skill 中移出，保留为完整参考；§3.6 离线处理；§4.1 质量门新增 MCP 依赖检查；注入文本歧义修复
   2026-07-09 | kimi-code (v2.7) | 新增 session-retire skill：退役→接班自动化 pipeline（Phase 1→5）；§1.5.4 引用该 skill 作为推荐方案；skills/ 库增至 4 个
   2026-07-08 | kimi-code (v2.6) | 记忆注入策略升级：§1.4 注入格式从全量预载改为索引+按需自读（minimal/standard/full 三级）；角色锚定"你是任务 session"；注入级别表更新；过期条目静默排除；§七 新增 v2.6 版本条目
@@ -790,6 +798,14 @@ Tunnel WireClient 的防御层次：
 
 | Tunnel 版本 | 关键变更 |
 |-------------|----------|
+| v2.16 | poll.py 预置脚本 + 降级：短命令 ~100B + poll-result-{sid}.txt 固定路径（PM Read 零 token）；Python ≥ 3.7 运行时依赖 |
+| v2.15 | poll_command Bash→Python 重写：消除 node 依赖 + LOCK_LOST 5×3s 重试 → exit 4；退出码协议 0/2/3/4；单进程无 shell 变量丢失 |
+| v2.14 | [CTX_HIGH] 上下文监控：三级阈值 + poll_command 自动检测 session 上下文衰减；规范统一 |
+| v2.13 | 跨项目双层记忆注入 + project 参数路由；Server 断联 R1-R4 部署到 8 个 skill 文件 |
+| v2.12 | Loop Orchestrator v2：9 文件独立 skill + 6 阶段自主执行循环 |
+| v2.11 | 架构深化：IWireClient 三接口拆分 + 竞态消除 + tools/helpers.ts 统一记忆注入 |
+| v2.10 | 架构深化：WireClient 拆分 + memory-injector 死代码删除 + 记忆 profile 迁移 |
+| v2.9 | grade_step LLM 评分验证 + loop 指纹检测；MCP stdio 优先启动 |
 | v2.8 | 修复注入文本歧义：`memory_get("ns")` → `memory_get(namespace="ns")`——消除与 `memory` MCP 服务器的工具名混淆；文档示例语法全面修正 |
 | v2.7 | 新增 `session-retire` skill——退役→接班自动化 pipeline（Phase 1→5：提取→归档→模板→启动→汇报）；coordinator-guide §1.5.4 引用该 skill 作为推荐方案 |
 | v2.6 | 记忆注入策略升级——全量预载 → 索引+按需自读（minimal/standard/full 三级格式）；角色锚定"你是任务 session"；注入文本 ~600B→~200B；>20条自动折叠；task session 首 turn 自读记忆 |

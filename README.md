@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.14-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.16-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
 [![Skills](https://img.shields.io/badge/skills-7-blue)]()
@@ -18,7 +18,7 @@
 | **无法确认完工** — Agent 说"好了"但实际没好 | `grade_step` LLM 评分验证 + loop 指纹检测，不过就重试 |
 | **冷启动灾难** — 每次新 session 从零开始 | `from_session` 注入 + 7-block 交接模板，5 步建完上下文 |
 | **重复告知规范** — Agent 不记得项目约定 | `memory_set` 一次录入 → 新 session 自动注入索引 → 按需拉取 |
-| **超时截断** — 耗时任务被 MCP 30s 超时杀死 | 即发即返 + Bash 后台轮询，OS 进程退出自动通知 |
+| **超时截断** — 耗时任务被 MCP 30s 超时杀死 | 即发即返 + Bash 后台 Python 轮询（v2.16 预置 poll.py + poll-result-{sid}.txt），OS 进程退出自动通知 |
 
 <details>
 <summary><b>更多场景对照</b></summary>
