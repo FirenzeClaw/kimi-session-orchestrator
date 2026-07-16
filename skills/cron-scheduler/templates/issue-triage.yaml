@@ -1,0 +1,91 @@
+# Issue Triage template
+# Purpose: classify and prioritize issues on a schedule. This template does not implement code changes.
+# Copy this template to .kimi-tunnel/cron.yaml, customize values, then mirror the same YAML into project/decisions/cron_config.
+
+name: issue-triage
+pattern: cron
+schedule: "30 9 * * 1-5" # Workdays at 09:30 local time.
+timezone: Asia/Shanghai
+
+run_lock:
+  key: issue-triage
+  ttl_minutes: 60
+  on_conflict: skip-and-renew
+
+renewal:
+  mode: one-shot-chain # one-shot-chain | single-recurring-job
+  cron_create:
+    recurring: false
+  existing_job_id: null
+
+external_actions:
+  apply_labels:
+    enabled: true
+    requires_confirmation: true
+  update_title_prefix:
+    enabled: false
+    requires_confirmation: true
+  comment_summary:
+    enabled: false
+    requires_confirmation: true
+
+source:
+  type: github
+  repo: FirenzeClaw/kimi-session-orchestrator
+  issue_filter:
+    state: open
+    labels: [] # Empty means all open issues.
+    exclude_labels:
+      - ai-done
+      - duplicate
+    limit: 50
+
+git:
+  enabled: false # Triage-only workflow; no branch, no implementation.
+
+execution:
+  mode: review-only
+  skill_chain: []
+  classify:
+    dimensions:
+      - type # bug | feature | docs | chore | question
+      - priority # p0 | p1 | p2 | p3
+      - effort # xs | s | m | l | xl
+      - owner_hint
+    rules:
+      p0: "Data loss, security issue, production outage, or broken release path."
+      p1: "Blocks active work or affects core user workflow."
+      p2: "Important but not blocking."
+      p3: "Nice-to-have or needs more information."
+  actions:
+    apply_labels: true
+    update_title_prefix: false
+    comment_summary: false
+    write_local_report: true
+    report_path: ".kimi-tunnel/cron-runs/{{date}}-issue-triage.md"
+  no_work:
+    behavior: silent-skip
+    retire_and_renew: true
+
+completion:
+  update_issue: true
+  push_branch: false
+  create_pr: false
+  human_review_required_for:
+    - p0
+    - security
+
+retire:
+  strategy: after_completion
+  spawn_successor: true
+  successor_cron: true
+  successor_startup_step_5: "Read .kimi-tunnel/cron.yaml, mirror it to project/decisions/cron_config if needed, then renew by renewal.mode: one-shot-chain uses CronCreate(recurring=false); single-recurring-job reuses existing_job_id."
+
+memory:
+  mirror:
+    namespace: project/decisions
+    key: cron_config
+  run_status_namespace: "session/{{session_id}}"
+
+created_by: "<session_id>"
+created_at: "<iso8601>"

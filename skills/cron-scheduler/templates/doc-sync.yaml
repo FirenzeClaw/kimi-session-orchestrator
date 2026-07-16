@@ -1,0 +1,100 @@
+# Doc Sync template
+# Purpose: periodically synchronize documentation after code changes.
+# Copy this template to .kimi-tunnel/cron.yaml, customize values, then mirror the same YAML into project/decisions/cron_config.
+
+name: doc-sync
+pattern: cron
+schedule: "0 17 * * 1-5" # Workdays at 17:00 local time.
+timezone: Asia/Shanghai
+
+run_lock:
+  key: doc-sync
+  ttl_minutes: 90
+  on_conflict: skip-and-renew
+
+renewal:
+  mode: one-shot-chain # one-shot-chain | single-recurring-job
+  cron_create:
+    recurring: false
+  existing_job_id: null
+
+external_actions:
+  write_docs:
+    enabled: true
+    requires_confirmation: true
+  push_branch:
+    enabled: false
+    requires_confirmation: true
+  create_pr:
+    enabled: false
+    requires_confirmation: true
+
+source:
+  type: git-diff
+  repo_path: "."
+  compare:
+    base_ref: origin/main
+    include_paths:
+      - src/**
+      - skills/**
+      - specs/**
+    exclude_paths:
+      - dist/**
+      - node_modules/**
+      - demo/node_modules/**
+
+git:
+  enabled: true
+  remote: origin
+  base_branch: main
+  update_base: true
+  rebase_before_push: false
+  branch_pattern: "ai/doc-sync-{{date}}"
+  push_branch: false
+  create_pr: false
+
+execution:
+  mode: confirmed # autonomous | confirmed | step-by-step
+  skill_chain:
+    - md-update
+    - documentation-and-adrs
+  sync_targets:
+    - README.md
+    - AGENTS.md
+    - CHANGELOG.md
+    - docs/**
+  prompt_template: |
+    Read .kimi-tunnel/cron.yaml and inspect code changes against {{base_ref}}.
+    Update only documentation that is stale because of code or skill changes.
+    Do not modify source code. Keep docs concise and aligned with project conventions.
+  verify:
+    method: selftest
+    checks:
+      - changed_docs_match_code_changes
+      - no_source_code_modified
+      - cron_config_preserved
+  no_work:
+    behavior: silent-skip
+    retire_and_renew: true
+
+completion:
+  update_issue: false
+  push_branch: false
+  create_pr: false
+  write_local_report: true
+  report_path: ".kimi-tunnel/cron-runs/{{date}}-doc-sync.md"
+
+retire:
+  strategy: after_completion
+  spawn_successor: true
+  successor_cron: true
+  successor_startup_step_5: "Read .kimi-tunnel/cron.yaml, mirror it to project/decisions/cron_config if needed, then renew by renewal.mode: one-shot-chain uses CronCreate(recurring=false); single-recurring-job reuses existing_job_id."
+
+memory:
+  mirror:
+    namespace: project/decisions
+    key: cron_config
+  run_status_namespace: "session/{{session_id}}"
+
+created_by: "<session_id>"
+created_at: "<iso8601>"

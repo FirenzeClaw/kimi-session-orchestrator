@@ -1,0 +1,102 @@
+# Loop Contract 共享模板。
+# loop-contract-from-docs 直接填充；loop-contract-from-idea 引用同一结构。
+
+meta:
+  # 生成来源：loop-contract-from-docs 或 loop-contract-from-idea。
+  generated_by: loop-contract-from-docs | loop-contract-from-idea
+  # 生成时间，使用 ISO timestamp。
+  generated_at: <ISO timestamp>
+  # from-docs 列出文件；from-idea 写 "user-input"。
+  source_docs:
+    - specs/003/spec.md
+
+goal:
+  # 一句话目标。
+  statement: "<一句话目标>"
+  # 每条以可验证动词开头。
+  acceptance_criteria:
+    - "<返回/通过/包含/不抛出> <条件>"
+  # PM 每轮循环后逐条核查。
+  direction_baseline:
+    - "<范围边界>"
+    - "<不做什么>"
+
+complexity:
+  # 复杂度等级：low、medium 或 high。
+  level: low | medium | high
+  # 复杂度因素，需包含计分证据。
+  factors:
+    - "<因素1>"
+
+loop_config:
+  # ≥2，不可降；实际值由 guide-complexity.md 映射。
+  min_cycles: 2
+  # 硬上限；实际值由 guide-complexity.md 映射。
+  max_cycles: 5
+  # 必须为 true，用于检测缩减范围、跳过验证、省略检查等降级倾向。
+  degradation_detection: true
+  # 连续 N 次自检无问题；实际值由 guide-complexity.md 映射。
+  consecutive_pass_required: 2
+  verify:
+    # 主验证器。
+    primary: grade_step
+    # 必须不同于 maker/PM session 模型，生成时替换为具体模型。
+    cross_model: <must-differ-from-pm-model>
+    # task session 自检轮次。
+    self_audit_rounds: 1
+
+operational_brakes:
+  # 重复相同工具调用超过该次数视为 no-progress，需要 PM 介入。
+  max_repeated_actions: 1
+  # 单轮执行最长墙钟时间；不是 token/美元预算硬上限。
+  max_wall_time_minutes: 60
+  # 超过后触发 session-retire 或压缩交接。
+  context_tokens_threshold: 36000
+  # 发现重复行动、超时、上下文超限时的升级规则。
+  no_progress_escalation: "暂停当前轮 → 记录状态 → PM 诊断或退役接班"
+
+harness:
+  # task session 必须可见的规则、工具或文档。
+  required_tools:
+    - "kimi-session-orchestrator MCP"
+    - "loop-orchestrator"
+    - "grade_step"
+  # 允许触碰的路径；生成时按项目替换。
+  allowed_paths:
+    - "<project-scope>"
+  # 禁止触碰的路径、模块或外部系统。
+  forbidden_paths:
+    - "<out-of-scope>"
+  # 循环状态写入位置。
+  state_namespace: "session/<loop-id>"
+  # 硬停止条件。
+  kill_switch: "PM says stop, repeated no-progress, or delivery_gate cannot be made verifiable"
+
+blockage_recovery:
+  # 最大重试次数。
+  max_retries: 3
+  # 阻塞恢复策略，至少 2 条。
+  strategies:
+    - "xmind-orchestrated → 多视角分析"
+    - "create_session(research) → 网络搜索"
+    - "PM 缩小范围后重试"
+  # 超出重试次数后的升级规则。
+  escalation: "3 次仍阻塞 → 暂停并报告"
+
+pm_duties:
+  # 每轮循环后的 PM 职责。
+  per_cycle:
+    - "对照 direction_baseline 核查方向一致性"
+    - "检测降级倾向：缩减范围/跳过验证/省略检查"
+    - "检查 operational_brakes 是否触发"
+  # 阻塞时的 PM 职责。
+  on_blockage:
+    - "先诊断后决策"
+
+delivery_gate:
+  - min_cycles 满足
+  - consecutive_pass_required 满足
+  - direction_baseline 全部通过
+  - operational_brakes 未触发或已完成 PM 处置
+  - harness.allowed_paths / forbidden_paths 未被违反
+  - PM 确认：方向一致且未发现降级

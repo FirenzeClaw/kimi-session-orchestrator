@@ -1,0 +1,104 @@
+# Daily Dev Loop template
+# Purpose: run a scheduled GitHub Issues driven development loop.
+# Copy this template to .kimi-tunnel/cron.yaml, customize values, then mirror the same YAML into project/decisions/cron_config.
+
+name: daily-dev-loop
+pattern: cron
+schedule: "0 10 * * 1-5" # Workdays at 10:00 local time.
+timezone: Asia/Shanghai
+
+run_lock:
+  key: daily-dev-loop
+  ttl_minutes: 180
+  on_conflict: skip-and-renew
+
+renewal:
+  mode: one-shot-chain # one-shot-chain | single-recurring-job
+  cron_create:
+    recurring: false
+  existing_job_id: null
+
+external_actions:
+  update_issue:
+    enabled: true
+    requires_confirmation: false
+  comment_on_issue:
+    enabled: true
+    requires_confirmation: false
+  push_branch:
+    enabled: true
+    requires_confirmation: true
+  create_pr:
+    enabled: false
+    requires_confirmation: true
+
+source:
+  type: github
+  repo: FirenzeClaw/kimi-session-orchestrator
+  issue_filter:
+    state: open
+    labels:
+      - AI
+    assignees: [] # Empty means any assignee.
+    milestones: [] # Empty means any milestone.
+    limit: 3 # Max issues processed per run.
+
+git:
+  enabled: true
+  remote: origin
+  base_branch: main
+  update_base: true # Pull latest base before creating a work branch.
+  rebase_before_push: false
+  branch_pattern: "ai/{{date}}-{{issue_number}}"
+  push_branch: true
+  create_pr: false
+
+execution:
+  mode: autonomous # autonomous | confirmed | step-by-step
+  implementation_mode: per_issue
+  skill_chain:
+    # Use loop-contract-from-docs when the issue links to an existing spec or design doc.
+    - loop-contract-from-docs
+    # Use loop-contract-from-idea when the issue only contains a rough product idea.
+    - loop-contract-from-idea
+    # Use loop-orchestrator to run the implementation and verification loop.
+    - loop-orchestrator
+  issue_prompt_template: |
+    Read .kimi-tunnel/cron.yaml and process GitHub issue {{issue_number}}.
+    First create a Loop Contract using loop-contract-from-docs when linked docs exist, otherwise use loop-contract-from-idea.
+    Then invoke loop-orchestrator in autonomous mode to implement, verify with grade_step, and report completion artifacts.
+  verify:
+    method: grade_step # grade_step | cross-model | compile-only
+    rounds: 3
+    required_result: pass
+    on_failure: retry_with_findings
+  no_work:
+    behavior: silent-skip
+    retire_and_renew: true
+
+completion:
+  update_issue: true
+  in_progress_label: ai-in-progress
+  done_label: ai-done
+  failure_label: ai-needs-human
+  comment_summary: true
+  push_branch: true
+  create_pr: false
+  write_local_report: true
+  report_path: ".kimi-tunnel/cron-runs/{{date}}-daily-dev-loop.md"
+
+retire:
+  strategy: after_completion # after_completion | context_threshold | per_issue
+  context_tokens: 36000
+  spawn_successor: true
+  successor_cron: true
+  successor_startup_step_5: "Read .kimi-tunnel/cron.yaml, mirror it to project/decisions/cron_config if needed, then renew by renewal.mode: one-shot-chain uses CronCreate(recurring=false); single-recurring-job reuses existing_job_id."
+
+memory:
+  mirror:
+    namespace: project/decisions
+    key: cron_config
+  run_status_namespace: "session/{{session_id}}"
+
+created_by: "<session_id>"
+created_at: "<iso8601>"
