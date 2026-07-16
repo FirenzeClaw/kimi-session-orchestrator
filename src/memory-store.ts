@@ -335,10 +335,14 @@ export class MemoryStore implements IMemoryStore {
       "project/learnings": "经验沉淀",
     };
 
-    // Collect entries per namespace (non-expired, ordered by updated_at DESC)
+    const maxBytes = profile.maxBytes || 8192;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 1: Collect global (tunnel DB) entries + fromSession handoff
+    // ═══════════════════════════════════════════════════════════════════════
+
     const nsEntries: Record<string, string[]> = {};
     let totalEntries = 0;
-    const maxBytes = profile.maxBytes || 8192;
 
     for (const ns of namespaces) {
       const rows = db.prepare(
@@ -349,10 +353,7 @@ export class MemoryStore implements IMemoryStore {
       totalEntries += keys.length;
     }
 
-    // --- Handoff from fromSession (collect BEFORE empty guard) ---
-    // Bug fix: handoff entries must be collected before the empty guard,
-    // otherwise they are silently discarded when project-level namespaces
-    // (e.g. project/meta) have no entries yet — a common case for new projects.
+    // Handoff from fromSession — MUST collect before DB switch (handoff is in tunnel DB)
     let handoffBlock = "";
     if (profile.fromSession) {
       const handoffEntries = this.get(`session/${profile.fromSession}/handoff`);
@@ -363,27 +364,97 @@ export class MemoryStore implements IMemoryStore {
       }
     }
 
-    // --- Empty guard (consider both project entries AND handoff) ---
-    if (totalEntries === 0 && !handoffBlock) {
-      return "[系统注入] 你是任务 session。当前无共享记忆条目。";
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 2: Local layer — child project memory (v2.13 cross-project)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    let localBlock = "";
+    let localProjectRoot: string | null = null;
+
+    if (profile.cwd) {
+      const resolved = this.resolveProjectRoot(profile.cwd);
+      if (resolved && resolved !== this.projectRoot) {
+        const tunnelRoot = this.projectRoot;
+
+        // Switch to child project DB
+        this.ensureDb(resolved);
+        localProjectRoot = resolved;
+
+        // Collect local entries (same level scope, always index-table format)
+        const localEntries: Record<string, string[]> = {};
+        let localTotal = 0;
+        const localDb = this.requireDb();
+        for (const ns of namespaces) {
+          const rows = localDb.prepare(
+            `SELECT key FROM entries WHERE project_id = ? AND namespace = ? AND expired = 0 ORDER BY updated_at DESC`
+          ).all(this.projectId(), ns) as Array<{ key: string }>;
+          const keys = rows.map((r) => r.key);
+          localEntries[ns] = keys;
+          localTotal += keys.length;
+        }
+
+        // Build local index table
+        if (localTotal > 0) {
+          const collapse = localTotal > 20;
+          const lines: string[] = [
+            `\n\n---\n\n以下记忆来自 ${localProjectRoot}（项目路径为 resolveProjectRoot(cwd) 结果），用 memory_get 按需读取：`,
+            "",
+            "| 命名空间 | 条目 | 建议 |",
+            "|---------|------|------|",
+          ];
+          for (const ns of namespaces) {
+            const keys = localEntries[ns];
+            if (keys.length === 0) continue;
+            const entryCell = collapse ? `(${keys.length} 条)` : keys.join(", ");
+            lines.push(`| ${ns} | ${entryCell} | ${suggestionMap[ns] || "按需"} |`);
+          }
+          if (collapse) {
+            lines.push("");
+            lines.push(`总计 ${localTotal} 条，已折叠。使用 memory_get(namespace=命名空间路径, project="${localProjectRoot}") 读取具体内容。`);
+          }
+          lines.push("");
+          lines.push(`调用格式: memory_get(namespace="project/meta", project="${localProjectRoot}")`);
+          localBlock = lines.join("\n");
+        }
+
+        // Restore tunnel DB — MUST restore before returning
+        this.ensureDb(tunnelRoot!);
+      }
     }
 
-    // --- Build output per level ---
-    let output = "";
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 3: Empty guard (considers all three sources: global + handoff + local)
+    // ═══════════════════════════════════════════════════════════════════════
+
     const disambig = "⛔ 调用 memory_get / memory_set 请使用 kimi-session-orchestrator MCP（非 memory 知识图谱 MCP）。\n\n";
     const rolePrefix = `[系统注入] 你是任务 session。${disambig}`;
 
+    if (totalEntries === 0 && !handoffBlock && !localBlock) {
+      return "[系统注入] 你是任务 session。当前无共享记忆条目。";
+    }
+
+    if (totalEntries === 0 && !handoffBlock && localBlock) {
+      return `${rolePrefix}${localBlock}`;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 4: Build output per level (with conditional globalHeader for dual-layer)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const isDualLayer = localBlock !== "";
+    const globalHeader = isDualLayer && totalEntries > 0 ? "## 全局上下文\n\n" : "";
+
+    let output = "";
+
     if (totalEntries === 0 && handoffBlock) {
-      // Handoff-only: project knowledge base is empty, but predecessor session
+      // Handoff-only: global knowledge base is empty, but predecessor session
       // left structured handoff data. Present it directly.
       output = `${rolePrefix} 项目知识库尚未建立，但有前置 session 交接信息可用。${handoffBlock}`;
     } else if (profile.level === "minimal") {
-      // FR-1 minimal: single instruction
-      output = `${rolePrefix} 使用 memory_get(namespace="project/meta") 读取项目背景后开始工作。`;
+      output = `${rolePrefix}${globalHeader}使用 memory_get(namespace="project/meta") 读取项目背景后开始工作。`;
     } else if (profile.level === "standard") {
-      // FR-1 standard: bullet list
       const lines: string[] = [
-        `${rolePrefix} 使用 memory_get 按需读取：`,
+        `${rolePrefix}${globalHeader}使用 memory_get 按需读取：`,
         "",
       ];
       for (const ns of namespaces) {
@@ -395,7 +466,7 @@ export class MemoryStore implements IMemoryStore {
       // full: index table
       const collapse = totalEntries > 20;
       const lines: string[] = [
-        `${rolePrefix} 以下记忆条目可用，请用 memory_get 按需读取：`,
+        `${rolePrefix}${globalHeader}以下记忆条目可用，请用 memory_get 按需读取：`,
         "",
         "| 命名空间 | 条目 | 建议 |",
         "|---------|------|------|",
@@ -418,13 +489,30 @@ export class MemoryStore implements IMemoryStore {
       output = lines.join("\n");
     }
 
-    // --- Append handoff block (for the normal path where project entries exist) ---
-    // The handoff-only path above already includes handoffBlock in output.
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 5: Append handoffBlock (only when global entries exist —
+    //         the handoff-only path above already includes it inline)
+    // ═══════════════════════════════════════════════════════════════════════
+
     if (handoffBlock && totalEntries > 0) {
       const outputBytes = Buffer.byteLength(output, "utf-8");
       const handoffBytes = Buffer.byteLength(handoffBlock, "utf-8");
       if (outputBytes + handoffBytes <= maxBytes) {
         output += handoffBlock;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Step 6: Append local layer (with maxBytes guard; truncated hint if over)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    if (localBlock) {
+      const currentBytes = Buffer.byteLength(output, "utf-8");
+      const localBytes = Buffer.byteLength(localBlock, "utf-8");
+      if (currentBytes + localBytes <= maxBytes) {
+        output += localBlock;
+      } else {
+        output += `\n\n---\n\n> 子项目记忆索引已省略（超出注入大小限制）。使用 memory_list(project="${localProjectRoot}") 手动浏览。`;
       }
     }
 
