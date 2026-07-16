@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-16 | kimi-code (feat) | 跨项目记忆双层注入：buildInjection() 消费 profile.cwd 生成双层注入文本（全局正文 + 子项目索引导航表）；6 个 memory_* MCP 工具添加 project 可选参数支持跨项目 DB 路由；else 分支显式 ensureDb(tunnelProjectRoot) 防状态泄漏
   2026-07-16 | kimi-code (fix) | session-retire cwd 修复：Phase 1 标记 get_session_info.workdir 为内部标识符（非绝对路径），PM 应从任务上下文或 read_session_log 确定 cwd；避免接班 session 创建到错误目录
   2026-07-16 | kimi-code (fix) | memory 注入 MCP 去歧义：buildInjection() 加 ⛔ 前缀指定 kimi-session-orchestrator MCP（修复 task session 调错 knowledge-graph memory_get）；§9 Kimi Server 断连 4 步自主恢复写入 7 个 guide；poll_command 动态端口检测（Server 重启换端口后脚本不再 exit 2）
   2026-07-16 | kimi-code (fix) | Skill memory_* 调用格式修复：session-retire 7-block 模板中 memory_get 把 key 拼进 namespace 致接班 session 读取为空（3 次独立调用→1 次合并调用）；loop-orchestrator 5 文件 memory_get 位置参数→命名参数（防 MCP 工具名冲突）+ memory_set 拆分 key-in-ns（17 处）；部署到 ~/.kimi-code/skills/
