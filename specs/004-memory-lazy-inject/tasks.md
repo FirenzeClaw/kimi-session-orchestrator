@@ -39,6 +39,7 @@
 ## Phase 2: US1 + US2 — Minimal & Standard Levels (P1) 🎯
 
 **Goal**: `minimal` 和 `standard` 级别的轻量索引——角色声明 + `memory_get` 指令。任务 session 首 turn 调用 `memory_get`。
+<!-- ⚠️ v2.12.1 修正：本文档 task 描述中 memory_get("ns") 为设计草案伪代码。v2.8 起 memory-store.ts 实际注入文本已使用命名参数 memory_get(namespace="ns")。详见 docs/issues/memory-call-namespace-mismatch.md -->
 
 **Independent Test**: `memory_level="standard"` + `execute_prompt` → session 首 turn 包含 `memory_get("project/meta")` 和 `memory_get("project/decisions")` 调用。
 

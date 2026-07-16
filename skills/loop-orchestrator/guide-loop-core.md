@@ -7,8 +7,8 @@
 ## §1 阶段 0 — 记忆加载
 
 ```
-memory_get("project/meta")     → 技术栈/规范/约定
-memory_get("project/learnings") → 过往 session 沉淀经验
+memory_get(namespace="project/meta")     → 技术栈/规范/约定
+memory_get(namespace="project/learnings") → 过往 session 沉淀经验
 ```
 
 若 project/ 命名空间为空 → 跳过，不阻塞。
@@ -31,7 +31,7 @@ memory_get("project/learnings") → 过往 session 沉淀经验
 
 拆解完成后：
 ```
-memory_set("session/loop-<loop-id>/plan", json) ← 持久化
+memory_set(namespace="session/loop-<loop-id>", key="plan", value="<plan JSON>") ← 持久化
 ```
 `loop-id = loop-<ISO timestamp>`。
 
@@ -50,7 +50,7 @@ memory_set("session/loop-<loop-id>/plan", json) ← 持久化
     → PM 自主判断：需要 grade_step?
       yes(关键产出/修复后/交付前)
         → grade_step(复用同 session!)
-        → pass? → memory_set("session/<sid>/findings", ...) → 下一工作包
+        → pass? → memory_set(namespace="session/<sid>", key="findings", value="<findings JSON>") → 下一工作包
         → fail? → execute_prompt(sid, 修复指令)
                   ≤2 retry → 3rd fail → 阶段3
       no(中间步骤/简单验证)
@@ -64,7 +64,7 @@ memory_set("session/loop-<loop-id>/plan", json) ← 持久化
 
 **强制拆 session 操作序列：**
 ```
-memory_set("session/loop-<id>/progress", ...)
+memory_set(namespace="session/loop-<id>", key="progress", value="<progress JSON>")
 memory_archive(旧sid)
 create_session(from_session=旧sid, cwd=..., permission_mode="auto")
 ```
@@ -87,7 +87,7 @@ create_session(from_session=旧sid, cwd=..., permission_mode="auto")
   上下文健康（turns < 80 且 lines < 1500）?
     → 注入原 session → 重试（重置 retry 计数）
   上下文腐化?
-    → memory_set progress
+    → memory_set(namespace="session/loop-<id>", key="progress", value="<progress JSON>")
     → memory_archive 归档
     → create_session(from_session=旧sid) 接班
     → 新 session 重试
@@ -107,7 +107,7 @@ create_session(from_session=旧sid, cwd=..., permission_mode="auto")
 
 ```
 📦 {模块} 完成: {M} PASS / {N} FAIL → 已修复
-memory_set("session/loop-<id>/milestones", ...)
+memory_set(namespace="session/loop-<id>", key="milestones", value="<milestones JSON>")
 ```
 
 不等待用户确认，直接进入下一工作包。

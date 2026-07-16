@@ -124,11 +124,9 @@ description: Use when retiring a task session and spawning a successor with full
 2. memory_get(namespace="project/meta")
 3. memory_get(namespace="project/decisions")
 4. memory_get(namespace="project/learnings")
-5. memory_get(namespace="session/<retiring_id>/handoff/completed")
-6. memory_get(namespace="session/<retiring_id>/handoff/pending")
-7. memory_get(namespace="session/<retiring_id>/handoff/decisions")
+5. memory_get(namespace="session/<retiring_id>/handoff")
 
-完成全部 7 步后回复'上下文已建立，共加载 N 条记忆，等待任务'。
+完成全部 5 步后回复'上下文已建立，共加载 N 条记忆，等待任务'。
 
 ⛔ 禁止在建立上下文前执行任何文件操作或代码修改。",
      auto_mode=true
@@ -155,12 +153,13 @@ description: Use when retiring a task session and spawning a successor with full
 
 ## 启动自举协议（新 session 视角）
 
-新 session 收到首条 prompt 后，**必须严格按顺序执行 7 个启动步骤**。此协议确保新 session 在首轮 turn 内完成上下文建立，第二轮即可直接执行任务。
+新 session 收到首条 prompt 后，**必须严格按顺序执行 5 个启动步骤**。此协议确保新 session 在首轮 turn 内完成上下文建立，第二轮即可直接执行任务。
 
 **关键约束**：
-- 7 步全部完成前，不得执行 Read 规范文件以外的任何文件操作
+- 5 步全部完成前，不得执行 Read 规范文件以外的任何文件操作
 - 不得跳过任何步骤——即使某步看似不相关
 - 若某步的 memory_get 返回空 → 记录"无数据"并继续
+- 步骤 5 的 `memory_get(namespace="session/<retiring_id>/handoff")` 一次返回 completed/pending/decisions 全部 3 条
 - 确认消息必须是"上下文已建立，共加载 N 条记忆，等待任务"（精确匹配以让 PM 识别）
 
 ## Edge Cases

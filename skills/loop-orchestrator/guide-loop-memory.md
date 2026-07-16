@@ -8,12 +8,12 @@
 
 | 阶段 | 操作 | 内容 |
 |------|------|------|
-| 0 启动 | `memory_get("project/meta")` | 项目技术栈/规范/约定 |
-| 0 启动 | `memory_get("project/learnings")` | 过往 session 沉淀经验 |
-| 1 拆解 | `memory_set("session/loop-<id>/plan", json)` | 工作包拆解方案 |
-| 2 每轮完成 | `memory_set("session/<sid>/findings")` | 关键发现/FAIL 项/修复记录 |
-| 3 阻塞 | `memory_set("session/loop-<id>/blockages")` | 阻塞原因+诊断结果 |
-| 4 里程碑 | `memory_set("session/loop-<id>/milestones")` | 完成模块+PASS/FAIL 统计 |
+| 0 启动 | `memory_get(namespace="project/meta")` | 项目技术栈/规范/约定 |
+| 0 启动 | `memory_get(namespace="project/learnings")` | 过往 session 沉淀经验 |
+| 1 拆解 | `memory_set(namespace="session/loop-<id>", key="plan", value="<plan JSON>")` | 工作包拆解方案 |
+| 2 每轮完成 | `memory_set(namespace="session/<sid>", key="findings", value="<findings JSON>")` | 关键发现/FAIL 项/修复记录 |
+| 3 阻塞 | `memory_set(namespace="session/loop-<id>", key="blockages", value="<blockage JSON>")` | 阻塞原因+诊断结果 |
+| 4 里程碑 | `memory_set(namespace="session/loop-<id>", key="milestones", value="<milestones JSON>")` | 完成模块+PASS/FAIL 统计 |
 | 5 交付 | `memory_archive(session_id)` | L2 findings → L1 learnings |
 
 ## §2 命名空间约定
@@ -25,6 +25,6 @@
 
 ## §3 注意事项
 
-- `memory_set` 仅接受 `project/` 或 `session/` 前缀（代码限制）
-- `memory_get` 无 namespace 限制
+- `memory_set` 仅接受 `project/` 或 `session/` 前缀（代码强制）
+- `memory_get` namespace 无前缀限制（可读取任意 namespace）
 - 写入 `session/<sid>/findings` 后，交付时通过 `memory_archive(sid)` 自动提升为 `project/learnings`

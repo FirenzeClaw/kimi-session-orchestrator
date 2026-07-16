@@ -93,7 +93,7 @@ description: 当需要进行多轮次自动循环编排（实施/验收闭环）
 4. auto_mode=true 时不需要手动审批
 5. create_session permission_mode="auto" 是 session 级别
 6. grade_step 不每次回复调用 — 仅在关键产出/修复后/交付前使用
-7. 用户中断时 — 立即 `memory_set("session/loop-<id>/progress", ...)` 记录当前进度，再响应中断。不丢弃已完成工作。
+7. 用户中断时 — 立即 `memory_set(namespace="session/loop-<id>", key="progress", value="<progress JSON>")` 记录当前进度，再响应中断。不丢弃已完成工作。
 
 ---
 

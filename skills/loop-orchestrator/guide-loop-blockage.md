@@ -35,7 +35,7 @@ read_session_log(sid) + list_io_records(sid) → 分析阻塞根因
     → execute_prompt(sid, "根据以下诊断调整方向: <诊断结果>")
     → 重置 retry 计数 → 重试
   原 session 腐化?
-    → memory_set("session/loop-<id>/progress", ...)
+    → memory_set(namespace="session/loop-<id>", key="progress", value="<progress JSON>")
     → memory_archive(旧sid)
     → create_session(from_session=旧sid, cwd=同上)
     → execute_prompt(新sid, "接续上一个 session 的进度，根据诊断调整: <诊断结果>")

@@ -195,7 +195,7 @@ wc -l skills/loop-orchestrator/SKILL.md
 ## §1 阶段 0 — 记忆加载
 
 ```
-memory_get("project/meta")     → 技术栈/规范/约定
+memory_get("project/meta")     → 技术栈/规范/约定    <!-- ⚠️ 实际调用须用 memory_get(namespace="project/meta")，见 docs/issues/memory-call-namespace-mismatch.md -->
 memory_get("project/learnings") → 过往 session 沉淀经验
 ```
 
@@ -509,6 +509,8 @@ read_session_log(sid) + list_io_records(sid) → 分析阻塞根因
 ---
 
 ## §1 各阶段 Memory 操作
+
+<!-- ⚠️ v2.12.1 修正：下表为设计草案伪代码，实际调用须使用命名参数，memory_set 须拆分 key 为独立参数。详见 docs/issues/memory-call-namespace-mismatch.md -->
 
 | 阶段 | 操作 | 内容 |
 |------|------|------|

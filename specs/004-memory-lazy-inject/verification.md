@@ -24,6 +24,7 @@ PM 操作：
 
 Wire log 确认注入格式（standard 级别）：
 ```
+<!-- ⚠️ 此为验证时注入文本格式。v2.8 起 memory-store.ts buildInjection() 实际输出已改为命名参数 memory_get(namespace="ns")。见 docs/issues/memory-call-namespace-mismatch.md -->
 [系统注入] 你是任务 session。 使用 memory_get 按需读取：
 
 - memory_get("project/meta") — 项目背景（必读）

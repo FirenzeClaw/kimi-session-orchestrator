@@ -94,7 +94,7 @@ Turn N: [注入 614B] + Turn 1~N-1 全文
 
 任务 session 收到后，在同一 turn 内：
 1. 评估哪些命名空间与自己相关
-2. 调用 `memory_get("project/meta")` → 获取技术栈和编码规范
+2. 调用 `memory_get("project/meta")` → 获取技术栈和编码规范    <!-- ⚠️ 此格式为设计草案伪代码。实际 session 收到注入文本后调用 memory_get(namespace="project/meta")。详见 docs/issues/memory-call-namespace-mismatch.md -->
 3. 调用 `memory_get("project/decisions", "naming_convention")` → 获取命名规则
 4. 基于获取的记忆上下文执行任务
 

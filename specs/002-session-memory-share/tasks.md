@@ -60,6 +60,7 @@
 ## Phase 3: US1 — MCP CRUD Tools for PM (P1) 🎯
 
 **Goal**: PM 可通过 MCP 工具录入、读取、管理项目知识库条目。
+<!-- ⚠️ 本文档测试描述使用位置参数格式。实际 MCP 调用建议用命名参数 memory_get(namespace="ns") 避免工具名冲突。见 docs/issues/memory-call-namespace-mismatch.md -->
 
 **Independent Test**: 调用 `memory_set("project/meta", "test", "hello")` → `memory_get("project/meta", "test")` → 返回 `{ value: "hello" }` → `memory_delete("project/meta", "test")` → 确认已删除。
 

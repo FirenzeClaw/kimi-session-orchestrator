@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.12-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.12.1-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
 [![Skills](https://img.shields.io/badge/skills-7-blue)]()
@@ -450,6 +450,7 @@ PM 操作:                            Task session 首 turn:
 | `docs/issues/memory-init-timing.md` | [FIXED] MemoryStore 启动初始化缺陷 |
 | `docs/issues/memory-cross-project-injection.md` | [FIXED] 跨项目注入静默失效 |
 | `docs/issues/grade-step-empty-response.md` | [FIXED] grade_step 两项修复：grader 无数据评分 + JSON 截断容错 |
+| `docs/issues/memory-call-namespace-mismatch.md` | [FIXED] Skill memory_get/set 调用格式错误——两类：位置参数 + key-in-namespace（17处，2个skill） |
 | `docs/issues/mcp-wire-offline-freeze.md` | [FIXED] MCP 进程在 Kimi Server 离线时假死——stdio 优先启动 |
 | `specs/001-adaptive-workflow-engine/` | 自适应工作流引擎 [DONE] |
 | `specs/002-session-memory-share/` | Session 冷启动记忆共享 [DONE] |
@@ -617,6 +618,7 @@ npm start
 
 | 日期 | 版本 | 变更 |
 |------|:--:|------|
+| 2026-07-16 | v2.12.1 | **Skill memory 调用格式修复**：`session-retire` 7-block 模板 `memory_get` namespace 拼写错误（`session/<id>/handoff/completed` → `session/<id>/handoff`），致接班 session 手动读取返回空（`fromSession` 注入正常）；`loop-orchestrator` 5 文件 17 处修复——`memory_get` 位置参数→命名参数（防 MCP 工具名冲突）+ `memory_set` key-in-namespace 拆分。详见 skills 代码 |
 | 2026-07-15 | v2.12 | **Loop Orchestrator v2**：Loop Engineering 独立为 `loop-orchestrator` skill（9 文件）——从 `kimi-session-orchestrator` 完全剥离。PM 硬边界（仅 MCP 工具）、6 阶段自主循环（记忆加载→拆解→执行→阻塞干预→里程碑→交付）、注入防腐化（单次 ≤3 项/≤500 字）、Memory 全程集成、用户中断保护。主 skill Q1 移除 Loop 入口，删除旧 guide-loop-*.md 7 文件。详见 `docs/superpowers/specs/2026-07-15-loop-orchestrator-v2-design.md` |
 | 2026-07-15 | v2.11 | **架构深化第2轮**：IWireClient → ISessionClient/IStatusClient/IPushClient 三接口拆分（20法→7/2/8）；消除 ambient sessionId 并发竞态（submitPrompt/sendPrompt/getSessionStatus 参数化，8个save/restore块删除）；apiGet/apiPost → getSessionMessages/resolveApproval 语义方法；记忆注入统一到 helpers.ts（injectMemoryIntoPrompt + setMemoryProfileWithExpiry，消除2处副本）；移除 WorkflowEngine `||` 回退（TunnelServices.workflowEngine 非可选）；tools/manifest.ts 桶文件统一注册；session-log-reader 共享 parseWireJsonl 解析流（3个parser→1个generator）。净 -150 行重复代码，15/15 E2E 通过 |
 | 2026-07-15 | v2.9.1 | **grade_step 两项修复**：① 评分前拉取目标 session IO 产出（修复 grader 无数据评分）；② JSON 截断容错——正则 fallback 提取 pass/score（修复反馈过长→score=0 误报）。**MCP stdio 优先启动**：`startMcpServer` 移至 `wireClient.connect` 之前，connect 改为后台异步（修复 Kimi Server 离线时 MCP 进程假死）。并行 Loop demo 验证通过 |

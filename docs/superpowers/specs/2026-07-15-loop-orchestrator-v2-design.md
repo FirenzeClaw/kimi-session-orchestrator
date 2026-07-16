@@ -111,7 +111,7 @@ Skill 加载:
 ```
 ┌──────────────────────────────────────────────────────────┐
 │ 阶段 0 — 记忆加载                                         │
-│   memory_get("project/meta")     → 技术栈/规范/约定        │
+│   memory_get("project/meta")     → 技术栈/规范/约定        │   <!-- ⚠️ v2.12.1 修正：此格式为设计草案伪代码，实际调用须使用命名参数 memory_get(namespace="project/meta")，见 docs/issues/memory-call-namespace-mismatch.md -->
 │   memory_get("project/learnings") → 过往沉淀经验           │
 ├──────────────────────────────────────────────────────────┤
 │ 阶段 1 — 拆解                                             │
@@ -246,6 +246,11 @@ skills/loop-orchestrator/
 ```
 
 ## §6 Memory 集成点
+
+<!-- ⚠️ v2.12.1 修正：下表中 memory_get/set 为设计草案伪代码。实际调用须使用命名参数：
+  memory_get → memory_get(namespace="project/meta")
+  memory_set → memory_set(namespace="session/loop-<id>", key="plan", value="<JSON>")
+  详见 docs/issues/memory-call-namespace-mismatch.md -->
 
 | 阶段 | memory 操作 | 内容 |
 |------|------------|------|

@@ -102,6 +102,8 @@ FOR ns IN levelMap[profile.level]:
 
 #### `minimal`
 
+<!-- ⚠️ 以下注入文本为设计草案格式。v2.8 起 memory-store.ts buildInjection() 实际输出已改为 memory_get(namespace="project/meta") 命名参数格式。详见 docs/issues/memory-call-namespace-mismatch.md -->
+
 ```
 [系统注入] 你是任务 session。使用 memory_get("project/meta") 读取项目背景后开始工作。
 ```

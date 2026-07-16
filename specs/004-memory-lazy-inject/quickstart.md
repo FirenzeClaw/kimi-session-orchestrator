@@ -13,6 +13,8 @@
 
 ### 之前（全量注入）
 
+<!-- ⚠️ v2.12.1 修正：本文档中 memory_get("ns") 为设计草案伪代码，实际调用须使用命名参数 memory_get(namespace="ns")。详见 docs/issues/memory-call-namespace-mismatch.md -->
+
 ```
 PM 操作:
   1. memory_get("project/meta")     ← 手动查记忆

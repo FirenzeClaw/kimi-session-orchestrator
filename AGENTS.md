@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 README.md §版本历史）:
+  2026-07-16 | kimi-code (fix) | Skill memory_* 调用格式修复：session-retire 7-block 模板中 memory_get 把 key 拼进 namespace 致接班 session 读取为空（3 次独立调用→1 次合并调用）；loop-orchestrator 5 文件 memory_get 位置参数→命名参数（防 MCP 工具名冲突）+ memory_set 拆分 key-in-ns（17 处）；部署到 ~/.kimi-code/skills/
   2026-07-15 | kimi-code (v2.12) | Loop Orchestrator v2 独立：loop-orchestrator skill 从 kimi-session-orchestrator 完全剥离（9 文件，含 6 阶段执行循环 + 注入防腐化 + 阻塞干预 + Memory 集成）；主 skill Q1 移除 Loop 入口；删除旧 guide-loop-*.md 7 文件；README/AGENTS 更新
   2026-07-15 | kimi-code (v2.11) | 架构深化第2轮：IWireClient → ISessionClient/IStatusClient/IPushClient 三接口拆分（20法→7/2/8）；消除 ambient sessionId 并发竞态（submitPrompt/sendPrompt/getSessionStatus 改为参数传递，8个save/restore块删除）；apiGet/apiPost → getSessionMessages/resolveApproval 语义方法；记忆注入 extract → tools/helpers.ts（injectMemoryIntoPrompt + setMemoryProfileWithExpiry，消除2处副本）；移除 WorkflowEngine || 回退分支（TunnelServices.workflowEngine 非可选）；tools/manifest.ts 桶文件；session-log-reader 共享 parseWireJsonl 解析流
   2026-07-15 | kimi-code (v2.10) | 架构深化：WireClient 上帝类拆分 → IWireClient 接口 + server-lock.ts；删除 memory-injector.ts（13行死代码）；新增 tools/helpers.ts（preparePrompt + ensureConnected 消除 4×重复样板）；记忆 profile 从 WireClient 移至 MemoryStore；WorkflowEngine/SessionWatcher 改用 IWireClient；workflow-store 手写 toYaml → js-yaml dump；/api/send 死端点移除
@@ -263,6 +264,7 @@ manual session 的工具调用由 PM 手动决策，流程：
 | `docs/issues/memory-cross-project-injection.md` | [FIXED] 跨项目 resolveProjectRoot 静默跳过 → 注入失效 |
 | `docs/issues/ubuntu-wire-client-startup.md` | [FIXED] Ubuntu Wire Client 启动时序——指数退避 + 定时重连；Linux 仍需 `--port 5494` |
 | `docs/issues/grade-step-empty-response.md` | [FIXED] grade_step 两项修复：grader 无数据评分 + JSON 截断容错 |
+| `docs/issues/memory-call-namespace-mismatch.md` | [FIXED] memory_get/set 调用格式错误——两类：位置参数 → 命名参数 + key-in-namespace 拆分（17处，2个skill） |
 | `docs/issues/mcp-wire-offline-freeze.md` | [FIXED] MCP 进程在 Kimi Server 离线时假死——stdio 优先启动 |
 | `specs/004-memory-lazy-inject/` | [DONE] 记忆注入策略升级——全量预载 → 索引+按需自读（minimal/standard/full 三级格式） |
 | `specs/005-web-ui-extension/` | 浏览器扩展+JS脚本双版本——废弃独立HTML监控，注入Kimi Web UI侧边栏 |
