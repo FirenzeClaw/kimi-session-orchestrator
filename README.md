@@ -232,6 +232,26 @@ Tunnel 内置五层防御：过期 lock 清理 + 10s 心跳 + 断连判定 + 指
 `kimi web` 未运行或已崩溃。v2.9.1 起 MCP stdio 优先启动，wire 离线时工具返回友好报错而非进程崩溃。
 </details>
 
+<details>
+<summary><b>Windows: listen EACCES: permission denied 0.0.0.0:3456？</b></summary>
+
+端口 3456 被 WSL2 绑定的 `winnat` 驱动划入动态排除范围。验证：
+
+```batch
+netsh int ipv4 show excludedportrange protocol=tcp | findstr 3456
+```
+
+如果有 `3430-3529` 输出说明命中。修复（管理员终端）：
+
+```batch
+net stop winnat
+netsh int ipv4 add excludedportrange protocol=tcp startport=54000 numberofports=100
+net start winnat
+```
+
+原理：为 winnat 固定预留 `54000-54099`，释放随机占用的 `3430-3529`。WSL2 网络短暂中断（3-5 秒），数据和进程不受影响。
+</details>
+
 ## 参与贡献
 
 [Bug / 功能请求](https://github.com/FirenzeClaw/kimi-session-orchestrator/issues) · Fork → PR · 提交前 `npm run build` 零错误。
