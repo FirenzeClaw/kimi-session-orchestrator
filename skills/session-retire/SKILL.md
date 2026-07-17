@@ -39,25 +39,46 @@ description: Use when retiring a task session and spawning a successor with full
 
 ```
 ① get_session_info(session_id="<retiring_id>")
-   → 拿到 title, wirePath。
+   → 拿到 title, wirePath, workdir。
    ⚠️ workdir 字段是 Kimi Code 内部标识符（如 cli-research/2ffc9873b6c1），
    不是绝对路径。不要用它作为 create_session 的 cwd。
 
+   ── ★ cwd 确定规则（按顺序执行，不可跳过）──
+
+   【步骤 1 — 强制】wirePath 解析（唯一可靠证据）：
+     wirePath 格式: .../sessions/wd_<末段目录名>_<hash>/session_<id>/agents/...
+     从 wd_<name>_<hash> 提取 <name>，此即 cwd 的末尾目录名。
+     例: .../sessions/wd_cli-research_2ffc9873b6c1/... → 末段 = cli-research
+         → cwd 必须以 cli-research 结尾，如 D:/code/cli-research
+
+   【步骤 2 — 强制】pwd 确认：
+     当前 session（即退役 session 自身）直接执行 Bash(pwd)，输出即 cwd。
+     - 这就是退役 session 的实际工作目录，无需跨 session 通信
+     - 拿到的路径必须与 wirePath 末段一致
+
+   【步骤 3 — 交叉验证（防误判）】：
+     检查 list_io_records 第一条 prompt 中的绝对路径。
+     - 若 IO 路径末段 == wirePath 末段 → 一致，确认 cwd ✓
+     - 若 IO 路径末段 ≠ wirePath 末段（如 IO 显示 .../mycli 但 wirePath 末段是 cli-research）：
+       → ⛔ IO 路径是 cwd 下的子目录，不是 cwd 本身！
+       → cwd 以 wirePath 末段为准。本例: cwd = D:/code/cli-research，不是 D:/code/cli-research/mycli
+
    接班 cwd 规则：**直接复制退役 session 的 cwd，不推导、不"向上"、不替换。**
-   - 方法：list_io_records 第一条 prompt 通常含路径（如"项目 D:/code/cli-research/mycli"），
-     或 read_session_log 中第一条 turn.prompt 的文本里找绝对路径
    - 若退役 session 在 D:/code/cli-research → 接班 cwd = D:/code/cli-research（不是 D:/code）
    - 若退役 session 在 D:/code/cli-research/mycli → 接班 cwd = D:/code/cli-research/mycli（不是 D:/code/cli-research）
    - ⛔ 禁止用 PM session cwd —— PM 在统筹项目，不在任务项目
    - ⛔ 禁止用 memory_status.projectRoot —— 那是顶层，不是任务目录
    - ⛔ 禁止用 get_session_info.workdir —— 那是 Kimi Code 内部标识符，非绝对路径
+   - ⛔ 禁止仅凭 IO records 中的子目录路径推断 cwd —— IO 里频繁出现的路径可能是子目录
    - v2.13+ 双层记忆注入自动按 cwd 选正确的 memory.db
 
 ② list_io_records(session_id="<retiring_id>", limit=15, max_content_length=3000)
-   → 最近 15 轮 prompt↔回复，用于提取已完成/待办/决策 + **推断退役 session 的实际 cwd**
+   → 最近 15 轮 prompt↔回复，用于提取已完成/待办/决策
+   → 同时从中查找 pwd 命令的回显输出（Kimi CLI 默认 echo 执行的命令）
+   → ⚠️ IO 中频繁出现的子目录路径（如 .../mycli/...）不能作为 cwd——仅用于步骤 3 交叉验证
 
 ③ read_session_log(session_id="<retiring_id>", limit=50)
-   → 深度上下文：错误、工具调用链、阻塞点 + **确认退役 session 的工作目录**
+   → 深度上下文：错误、工具调用链、阻塞点
 
 ④ memory_get(namespace="project/meta")      ← 若 Phase 0 跳过则直接跳过
    memory_get(namespace="project/decisions")
@@ -69,7 +90,7 @@ description: Use when retiring a task session and spawning a successor with full
    → 新 session 通过 memory_level=full + from_session 自动获取两层记忆
 ```
 
-**完成标准**：拿到退役 session 实际工作目录的绝对路径 + 最近对话摘要 + 两层项目知识基线（若可用）。
+**完成标准**：拿到退役 session 实际工作目录的绝对路径（经 wirePath + pwd + 交叉验证三重确认） + 最近对话摘要 + 两层项目知识基线（若可用）。
 
 ### Phase 2 — 归档与持久化
 
@@ -191,7 +212,7 @@ description: Use when retiring a task session and spawning a successor with full
 | 新 session 超时未确认上下文 | 用 poll_session 检查状态。若 idle 超过 60s → 重新发送首条 prompt |
 | 退役 session 仍活跃（未 idle） | 等待其完成当前 turn → 继续。不强制中断正在执行的 session。 |
 | 批量退役多个 session | 逐个处理。每个完整的 Phase 1→5 后再开始下一个。汇报时汇总。 |
-| **退役 session 在子项目路径** | cwd 是退役 session 实际工作目录（如 D:/code/cli-research/mycli），不是项目根（D:/code/cli-research），更不是 PM 项目根（D:/code/kimi-session-orchestrator） | Phase 1 从 io_records/log 推断实际 cwd；v2.13 双层记忆自动按 cwd 选正确的 memory.db |
+| **退役 session 在子项目路径** | cwd 是退役 session 实际工作目录（如 D:/code/cli-research/mycli），不是项目根（D:/code/cli-research），更不是 PM 项目根（D:/code/kimi-session-orchestrator） | Phase 1 步骤 1 wirePath 解析出末段目录名 → 步骤 2 pwd 确认 → 步骤 3 交叉验证。IO 中频繁出现的子目录路径不能作为 cwd；v2.13 双层记忆自动按 cwd 选正确的 memory.db |
 
 ## Common Mistakes
 
@@ -203,14 +224,15 @@ description: Use when retiring a task session and spawning a successor with full
 | 7-block 模板缺区块 | 新 session 不知道规范文件、权限边界、已做决策 | 全部 7 个区块必须填写，不可留空 |
 | 不给新 session 时间建立上下文 | 新 session 跳过 AGENTS.md + memory_get，直接执行任务 → 偏离规范 | 等待"上下文已建立"回复后再分派任务 |
 | 退役前未执行 memory_archive | session 期间的全部发现随 session 关闭而丢失 | Phase 2 步骤⑤不可跳过（除非无数据） |
-| **cwd 用 PM 项目根或 projectRoot** | 接班 session 创建到错误目录，无法访问退役 session 实际工作的文件 | cwd = 退役 session 实际工作目录（从 io_records/log 推断），v2.13 自动处理记忆分层 |
+| **cwd 用 PM 项目根或 projectRoot** | 接班 session 创建到错误目录，无法访问退役 session 实际工作的文件 | cwd = 退役 session 实际工作目录（Phase 1 三重确认：wirePath 末段 + pwd + 交叉验证），v2.13 自动处理记忆分层 |
+| **cwd 被 IO 中的子目录路径误导** | 接班 session cwd 设为子目录（如 .../mycli 而非 .../cli-research），wire 目录名不匹配 | Phase 1 步骤 3：IO 路径末段 ≠ wirePath 末段时，以 wirePath 为准。记住：IO 中频繁出现的路径可能是 cwd 的子目录 |
 
 ## Red Lines
 
 - 退役前未执行 memory_archive → 丢失全部发现
 - **memory 未初始化时不做询问直接降级** → handoff 数据未持久化，信息仅靠一次性 prompt 传递
 - create_session 未传 from_session → 接班 session 盲飞
-- **create_session cwd 用错（PM 项目根 / projectRoot / 项目根目录）** → 接班 session 在错误目录工作，v2.13 记忆注入错位
+- **create_session cwd 用错（PM 项目根 / projectRoot / 项目根目录 / IO 子目录路径）** → 接班 session 在错误目录工作，v2.13 记忆注入错位。cwd 必须经 Phase 1 三重确认
 - 新 session 首条 prompt 无启动自举指令 → session 不知道要读什么
 - 上下文建立前分派任务 → 冲动操作，产出不可靠
 - 7-block 模板有空白区块 → 信息缺口 = PM 失职
