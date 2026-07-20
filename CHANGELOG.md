@@ -2,6 +2,15 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.18 — 2026-07-20
+
+**0.27 适配收尾：watch 重置兜底 + turn 失败报错 + retire 服务端归档**
+
+- fix: watch 文本重置兜底 `turn.started`——0.27 无 `prompt.submitted` 事件，多 prompt watch 不再累积旧文本（0.22.x 双事件重置无害，计数仍只在 submitted 累加）
+- feat: `sendPrompt` turn 失败显式报错——`turn.ended` 的 failed/cancelled 写入缓存 `lastError`（`[code] message`，fallback 保留原始 message），等待结束后抛出带错误码的异常；`turn.started`/`completed` 双路清除防残留误抛；REST 兜底路径保持旧行为
+- feat: `session-retire` 接入服务端归档——Phase 2 追加 `:export`（ZIP 留档，建议 `unzip -l` 验证）+ `:archive`（REST 列表消失），失败降级为仅记忆归档不阻塞；Phase 4 步骤编号 ⑦⑧→⑧⑨
+- test: grade_step / run_flow / watch 输出 0.27 e2e 复验通过；单测增至 32 例（watch 重置、lastError 生命周期、fallback 链）
+
 ## v2.17.1 — 2026-07-20
 
 **P1 实测闭环：审批态映射修正 + 测试基建**

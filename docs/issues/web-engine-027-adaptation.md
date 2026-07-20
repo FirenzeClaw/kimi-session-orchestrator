@@ -120,10 +120,12 @@
 
 | # | 事项 | 研究结论 |
 |---|------|----------|
-| 3 | `session-retire` skill 接入 `:archive` + `POST /export` | 端点均已实测：`:archive` 后 session 从列表消失（REST 不可列）；`/export` 返回 ZIP（含 manifest.json）。接入点明确，待实施 |
-| 4 | `sendPrompt` 对 turn 失败显式报错 | 失败信号已实测齐全：`turn.ended.reason=failed` + `error{code,message,retryable}` 事件、`prompt.completed.reason`、`last_turn_reason` 字段。sendPrompt 可在 waitForStatus 后检查 last_turn_reason 或捕获 error 事件，待实施 |
+| 3 | `session-retire` skill 接入 `:archive` + `POST /export` | ✅ 已实施（v2.18）：Phase 2 步骤⑦，含降级路径与 export 验证指引 |
+| 4 | `sendPrompt` 对 turn 失败显式报错 | ✅ 已实施（v2.18）：turn.ended failed/cancelled 写 `lastError` → sendPrompt 抛带码异常；turn.started/completed 双路清除 |
 | 5 | skills/ 文档 curl 示例 | ✅ 核对完毕：skills/ 无 API curl 示例，AGENTS.md 审批示例已带 `?status=pending`，无需改 |
-| 6 | npm `test` script | ✅ 已落地：`npm test` → `node --test tests/*.test.mjs`（23/23 通过） |
+| 6 | npm `test` script | ✅ 已落地：`npm test` → `node --test tests/*.test.mjs`（32/32 通过） |
+
+另：`prompt.submitted` 事件缺失已处理（v2.18）——watch 文本重置改由 `turn.started` 兜底；`promptCount` 在 0.27 下恒 0（cosmetic，无消费方）。
 
 ### P3 — 远期/研究
 

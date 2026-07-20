@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 CHANGELOG.md）:
+  2026-07-20 | kimi-code (feat) | v2.18 适配收尾：watch 重置兜底 turn.started（0.27 无 prompt.submitted）+ sendPrompt turn 失败显式报错（lastError 生命周期）+ session-retire 接入 :export/:archive 服务端归档；grade_step/run_flow/watch e2e 复验通过；32 单测
   2026-07-20 | kimi-code (fix) | v2.17 Web 引擎 0.27 适配：WS Bearer 鉴权（missing_credential）+ work_changed 事件取代 status_changed + prompt body 恒带 model（agent_config.model 被忽略，有粘性）+ 状态归一化层 + POLL_SCRIPT 双模型；API.md 实测重写（11 项破坏性变更）；20 单测 + 生产链路回归通过
   2026-07-16 | kimi-code (docs) | Loop Engineering skill 文档同步：新增 loop-contract-from-docs/from-idea、cron-scheduler 三个 PM 级 skill；SPEC 006/007；Loop Contract 模板补 operational_brakes+harness；cron 模板补 run_lock+one-shot renewal+external_actions
   2026-07-16 | kimi-code (feat) | v2.16 预置脚本 + 降级回调：POLL_SCRIPT 常量 + existsSync 短命令分支（~/.kimi-tunnel/poll.py 存在时 ~4KB→~100 bytes）；execute_prompt/chat_with_session 自动 writeFile 写 poll.py，失败降级不阻塞；fetch_result 新增 poll-result-{sid}.txt 固定路径结果文件（PM Read 零 token）；路径 Win/Linux 规范化
