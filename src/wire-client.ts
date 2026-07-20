@@ -430,6 +430,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
 
     if (type === "turn.started") {
       cached.lastTurnId = payload?.turnId as number;
+      // 新 turn 开始即清除旧错误：防止上一轮 failed 后本轮以 filtered 等非常规 reason 结束时残留误抛
+      delete cached.lastError;
       cached.updatedAt = Date.now();
       this.sessionStateCache.set(sessionId, cached);
       process.stderr.write(`[wire-client] Turn started for ${sessionId}\n`);

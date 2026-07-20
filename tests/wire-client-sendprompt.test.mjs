@@ -49,3 +49,14 @@ test("sendPrompt：turn 成功不抛错", async () => {
   const r = await c.sendPrompt("s1", "hi");
   assert.equal(r.status, "completed");
 });
+
+
+test("turn.started → 清除残留 lastError（防上一轮失败误抛）", () => {
+  const c = makeStubClient();
+  c.handleDirectEvent({
+    type: "turn.ended",
+    payload: { reason: "failed", error: { code: "x", message: "y" }, session_id: "s1" },
+  });
+  c.handleDirectEvent({ type: "turn.started", payload: { turnId: 2, session_id: "s1" } });
+  assert.equal(c.sessionStateCache.get("s1").lastError, undefined);
+});
