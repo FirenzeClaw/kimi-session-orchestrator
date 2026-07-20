@@ -52,3 +52,14 @@ test("edge: empty body → unknown", () => {
 test("edge: status wins over busy", () => {
   assert.equal(normalizeSessionStatus({ status: "idle", busy: true }), "idle");
 });
+
+// ── 边界：busy 非布尔值 → unknown（严格相等判定，不做真值判断） ──
+test("edge: non-boolean busy → unknown", () => {
+  assert.equal(normalizeSessionStatus({ busy: null }), "unknown");
+  assert.equal(normalizeSessionStatus({ busy: "true" }), "unknown");
+});
+
+// ── 边界：sessionBody 存在但无 pending_interaction → idle ──
+test("edge: busy=false + detail without pending_interaction → idle", () => {
+  assert.equal(normalizeSessionStatus({ busy: false }, {}), "idle");
+});

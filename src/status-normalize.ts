@@ -25,7 +25,8 @@ export interface StatusEndpointBody {
 export interface SessionDetailBody {
   status?: string; // 0.22.x
   busy?: boolean; // 0.24+
-  pending_interaction?: string; // 0.24+: none | approval | question（后两者为推断值）
+  // 0.24+: none 已经 0.27.0 实测确认；approval/question 从二进制 schema 推断、尚未实测（见 API.md §五）
+  pending_interaction?: string;
   [key: string]: unknown;
 }
 
