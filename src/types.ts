@@ -35,12 +35,17 @@ export interface ISessionClient {
     sessionId: string,
     opts?: { pageSize?: number; role?: string }
   ): Promise<KimiContentBlock[]>;
+  /** Latest assistant message (id + text) — watch 锚定用（v2.19） */
+  getLatestAssistantMessage(
+    sessionId: string
+  ): Promise<{ id: string; text: string } | null>;
   /** Resolve an approval — replaces apiPost("/api/v1/sessions/SID/approvals/AID", ...) */
   resolveApproval(
     sessionId: string,
     approvalId: string,
     action: "approved" | "rejected",
-    reason?: string
+    reason?: string,
+    scope?: "session"
   ): Promise<void>;
 
   // Utility

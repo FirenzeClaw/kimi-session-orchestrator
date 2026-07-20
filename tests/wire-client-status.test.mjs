@@ -94,3 +94,11 @@ test("watch: prompt.submitted 仍重置并计数（0.22.x 兼容）", () => {
   assert.equal(c.watchAssistantText, "");
   assert.equal(c.watchPromptCount, 1);
 });
+
+test("getCachedStatus：>30s 的缓存返回 null（TTL，防陈旧 idle）", () => {
+  const c = makeClient();
+  c.sessionStateCache.set("s1", { status: "idle", updatedAt: Date.now() - 31000 });
+  assert.equal(c.getCachedStatus("s1"), null);
+  c.sessionStateCache.set("s1", { status: "idle", updatedAt: Date.now() - 1000 });
+  assert.equal(c.getCachedStatus("s1"), "idle");
+});

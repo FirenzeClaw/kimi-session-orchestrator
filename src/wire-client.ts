@@ -807,10 +807,13 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     }
   }
 
-  /** Get cached status for any session (WebSocket push). Returns null if never seen. */
+  /** Get cached status for any session (WebSocket push). Returns null if never seen or stale (>30s). */
   getCachedStatus(sessionId: string): string | null {
     const cached = this.sessionStateCache.get(sessionId);
-    return cached?.status || null;
+    // 与 getSessionStatus 快路径同一 TTL：过期缓存（如上一轮的 idle）不可信，
+    // 否则 watch/轮询会被陈旧 idle 误导而过早解析（v2.19 修复）
+    if (!cached || Date.now() - cached.updatedAt > 30000) return null;
+    return cached.status;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -910,15 +913,41 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     return blocks;
   }
 
+  /**
+   * 获取 session 最新一条 assistant 消息（id + 拼接文本）。
+   * 供 watch 锚定：创建 watch 时记录基线 id，仅在出现新 id 时解析（v2.19）。
+   */
+  async getLatestAssistantMessage(
+    sessionId: string
+  ): Promise<{ id: string; text: string } | null> {
+    try {
+      const resp = await this.transport.apiGet<{ items: KimiMessage[] }>(
+        `/api/v1/sessions/${sessionId}/messages?page_size=1&role=assistant`
+      );
+      const msg = resp.items?.[0];
+      if (!msg) return null;
+      const text = (msg.content || [])
+        .filter((b) => b.type === "text" && b.text)
+        .map((b) => b.text!)
+        .join("");
+      return { id: msg.id, text };
+    } catch {
+      return null;
+    }
+  }
+
   /** Resolve a pending tool approval — replaces raw apiPost path construction. */
   async resolveApproval(
     sessionId: string,
     approvalId: string,
     action: "approved" | "rejected",
-    reason?: string
+    reason?: string,
+    scope?: "session"
   ): Promise<void> {
     const body: Record<string, unknown> = { decision: action };
     if (reason) body.reason = reason;
+    // scope=session 请求服务端将同类工具加入 session 白名单（v2.19 透传）
+    if (scope) body.scope = scope;
     await this.transport.apiPost(
       `/api/v1/sessions/${sessionId}/approvals/${approvalId}`,
       body

@@ -18,7 +18,7 @@ export function registerGetTunnelStatus(server: McpServer, services: TunnelServi
             type: "text",
             text: JSON.stringify(
               {
-                version: "2.18.0",
+                version: "2.19.0",
                 wireConnected: wireClient.isConnected(),
                 ...status,
                 uptimeSeconds: uptime,

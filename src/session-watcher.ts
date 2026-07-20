@@ -5,6 +5,7 @@ interface WatchEntry {
   status: "watching" | "done" | "error";
   result: string | null;
   error: string | null;
+  baselineId: string | null;
   createdAt: number;
   resolvedAt: number | null;
 }
@@ -29,14 +30,19 @@ export class SessionWatcher {
    * Start watching a session. Returns a watch ID immediately.
    * The watcher polls the session status every 3s via WS cache
    * and captures the final text when the turn completes.
+   *
+   * v2.19 锚定：创建时记录最新 assistant 消息 id 为基线，
+   * 仅当出现新消息时才解析——防止陈旧 idle 缓存导致过早解析、返回过期回复。
    */
-  watch(sessionId: string): string {
+  async watch(sessionId: string): Promise<string> {
     const watchId = `watch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const baseline = await this.sessionClient.getLatestAssistantMessage(sessionId).catch(() => null);
     this.watches.set(watchId, {
       sessionId,
       status: "watching",
       result: null,
       error: null,
+      baselineId: baseline?.id ?? null,
       createdAt: Date.now(),
       resolvedAt: null,
     });
@@ -96,12 +102,12 @@ export class SessionWatcher {
       try {
         await this.sessionClient.submitPrompt(sessionId, nextInstruction, { autoApprove: true });
         // Now safe to start watching — the new turn is in flight
-        const newWatchId = this.watch(sessionId);
+        const newWatchId = await this.watch(sessionId);
         return { ...response, next_watch_id: newWatchId };
       } catch (err) {
         process.stderr.write(`[session-watcher] continue submit failed: ${(err as Error).message}\n`);
         // Even on failure, try watching (the prompt may have been injected mid-turn)
-        const newWatchId = this.watch(sessionId);
+        const newWatchId = await this.watch(sessionId);
         return { ...response, next_watch_id: newWatchId };
       }
     }
@@ -139,18 +145,18 @@ export class SessionWatcher {
 
     for (const [watchId, entry] of active) {
       try {
-        // Check WS cache first (zero I/O), fall back to REST
+        // Check WS cache first (TTL 30s), fall back to REST
         const cached = this.statusClient.getCachedStatus(entry.sessionId);
-        if (cached === "idle" || cached === "aborted" || cached === "awaiting_approval") {
-          await this.resolveWatch(watchId, entry);
-          continue;
-        }
+        const status = cached ?? (await this.statusClient.getSessionStatus(entry.sessionId));
 
-        // If no WS cache hit, try REST status
-        const status = await this.statusClient.getSessionStatus(entry.sessionId);
+        const terminal = status === "idle" || status === "aborted" || status === "awaiting_approval";
+        if (!terminal) continue;
 
-        if (status === "idle" || status === "aborted" || status === "awaiting_approval") {
-          await this.resolveWatch(watchId, entry);
+        // v2.19 锚定：必须出现相对基线的新 assistant 消息才解析，
+        // 否则（陈旧 idle / 目标 turn 尚未产出）继续等待
+        const latest = await this.sessionClient.getLatestAssistantMessage(entry.sessionId);
+        if (latest && latest.id !== entry.baselineId) {
+          await this.resolveWatch(watchId, entry, latest.text);
         }
       } catch {
         // Polling error — retry next interval
@@ -158,30 +164,12 @@ export class SessionWatcher {
     }
   }
 
-  private async resolveWatch(watchId: string, entry: WatchEntry): Promise<void> {
-    try {
-      // Fetch the last assistant response using semantic method
-      const blocks = await this.sessionClient.getSessionMessages(entry.sessionId, { pageSize: 5, role: "assistant" });
+  private async resolveWatch(watchId: string, entry: WatchEntry, text: string): Promise<void> {
+    entry.status = "done";
+    entry.result = text || "(empty response)";
+    entry.resolvedAt = Date.now();
+    this.watches.set(watchId, entry);
 
-      // Get text from the last assistant message
-      let text = "";
-      for (const block of blocks) {
-        if (block.type === "text" && block.text) {
-          text = block.text; // last text block wins
-        }
-      }
-
-      entry.status = "done";
-      entry.result = text || "(empty response)";
-      entry.resolvedAt = Date.now();
-      this.watches.set(watchId, entry);
-
-      process.stderr.write(`[session-watcher] ${watchId} resolved (${text.length} chars)\n`);
-    } catch (err) {
-      entry.status = "error";
-      entry.error = (err as Error).message;
-      entry.resolvedAt = Date.now();
-      this.watches.set(watchId, entry);
-    }
+    process.stderr.write(`[session-watcher] ${watchId} resolved (${text.length} chars)\n`);
   }
 }

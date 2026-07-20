@@ -21,7 +21,7 @@ export function registerWatchSession(server: McpServer, services: TunnelServices
     },
     async ({ session_id }) => {
       const w = getWatcher(services);
-      const watchId = w.watch(session_id);
+      const watchId = await w.watch(session_id);
       return {
         content: [{
           type: "text",

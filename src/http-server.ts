@@ -80,7 +80,7 @@ export function startHttpServer(port: number, services: TunnelServices): void {
     res.json({
       ...messageQueue.getStatus(),
       wireConnected: wireClient.isConnected(),
-      version: "2.18.0",
+      version: "2.19.0",
     });
   });
 

@@ -2,6 +2,15 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.19 — 2026-07-20
+
+**watch 过早解析修复 + approval scope 透传（功能性回归测试副产）**
+
+- fix: `watch_session`/`continue_watch` 过早解析返回过期回复——watch 创建时锚定最新 assistant 消息 id（`getLatestAssistantMessage`），仅在出现新消息时解析；`getCachedStatus` 补 30s TTL（与 getSessionStatus 一致），消除陈旧 idle 误导（`session-watcher.ts`、`wire-client.ts`）
+- fix: `resolveWatch` 改用最新一条 assistant 消息文本（原"最近 5 条取最后块"会选到旧消息）
+- fix: `approve_tool(scope=session)` 的 `scope` 透传到审批 POST body（此前从不发送，服务端白名单不生效）
+- test: session-watcher 锚定 5 例 + TTL 1 例（共 38 例）
+
 ## v2.18 — 2026-07-20
 
 **0.27 适配收尾：watch 重置兜底 + turn 失败报错 + retire 服务端归档**

@@ -43,7 +43,14 @@ export function registerApproveTool(server: McpServer, services: TunnelServices)
             return { content: [{ type: "text", text: "approval_id 需要配合 session_id 使用" }], isError: true };
           }
           try {
-            await wireClient.resolveApproval(sid, approval_id, "approved", "PM 放行");
+            // scope=session 时透传给服务端：同类工具加入 session 白名单（v2.19）
+            await wireClient.resolveApproval(
+              sid,
+              approval_id,
+              "approved",
+              "PM 放行",
+              scope === "session" ? "session" : undefined
+            );
             apiApproved = true;
           } catch (err) {
             return {
