@@ -99,6 +99,9 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   private wsSubscribedSessions = new Set<string>();
   // Event-driven wait: resolve when status changes to idle
   private statusResolvers = new Map<string, Array<{ resolve: (v: string) => void; reject: (e: Error) => void }>>();
+  // Fix C: 0.27 忽略 agent_config.model，prompt body 必须恒带 model（有粘性，幂等）
+  private sessionModels = new Map<string, string>();
+  private serverDefaultModel: string | null = null;
   // WS-pushed session state cache — zero-I/O alternative to wire.jsonl parsing
   private sessionStateCache = new Map<string, { status: string; lastTurnId?: number; lastText?: string; updatedAt: number }>();
   // Optional watch output: write completion status to a file for coordinating session
@@ -207,6 +210,9 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     // Update internal sessionId so subsequent API calls target this session
     this.setSessionId(resp.id);
     this.sessionPermissionMode = options.permissionMode || null;
+    if (options.model) {
+      this.sessionModels.set(resp.id, options.model);
+    }
 
     return { sessionId: resp.id, title: resp.title };
   }
@@ -586,6 +592,24 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   // Prompt submission
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  /**
+   * 解析 prompt 应携带的 model：session 显式指定 > server /auth default_model。
+   * 0.27 忽略 agent_config.model，空 model 的 turn 必败（model.not_configured）；
+   * model 有 session 级粘性，恒带幂等且覆盖 server 重启丢粘性的边界。
+   */
+  private async resolvePromptModel(sessionId: string): Promise<string> {
+    const explicit = this.sessionModels.get(sessionId);
+    if (explicit) return explicit;
+    if (this.serverDefaultModel !== null) return this.serverDefaultModel;
+    try {
+      const auth = await this.transport.apiGet<{ default_model?: string | null }>("/api/v1/auth");
+      this.serverDefaultModel = auth.default_model || "";
+    } catch {
+      this.serverDefaultModel = "";
+    }
+    return this.serverDefaultModel;
+  }
+
   async submitPrompt(
     sessionId: string,
     prompt: string,
@@ -625,6 +649,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     if (autoApprove || this.sessionPermissionMode === "auto") {
       body.permission_mode = "auto";
     }
+    const model = await this.resolvePromptModel(sessionId);
+    if (model) body.model = model;
 
     const resp = await this.transport.apiPost<{ prompt_id: string }>(
       `/api/v1/sessions/${sessionId}/prompts`,
@@ -672,6 +698,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     if (autoApprove || this.sessionPermissionMode === "auto") {
       promptBody.permission_mode = "auto";
     }
+    const model = await this.resolvePromptModel(sessionId);
+    if (model) promptBody.model = model;
     const submitResp = await this.transport.apiPost<{
       prompt_id: string;
       user_message_id: string;
