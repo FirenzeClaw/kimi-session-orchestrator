@@ -5,7 +5,7 @@ interface WatchEntry {
   status: "watching" | "done" | "error";
   result: string | null;
   error: string | null;
-  baselineId: string | null;
+  anchorTime: number;
   createdAt: number;
   resolvedAt: number | null;
 }
@@ -31,18 +31,19 @@ export class SessionWatcher {
    * The watcher polls the session status every 3s via WS cache
    * and captures the final text when the turn completes.
    *
-   * v2.19 锚定：创建时记录最新 assistant 消息 id 为基线，
-   * 仅当出现新消息时才解析——防止陈旧 idle 缓存导致过早解析、返回过期回复。
+   * v2.19 时间锚：解析条件是「最新 assistant 消息的 createdAt ≥ 锚点」。
+   * 锚点 = 本 client 最近一次 submit 时刻（若有），否则 watch 创建时刻。
+   * 防止陈旧 idle 缓存导致过早解析、也兼容 turn 在 watch 创建前已完成的竞态。
    */
-  async watch(sessionId: string): Promise<string> {
+  watch(sessionId: string): string {
     const watchId = `watch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const baseline = await this.sessionClient.getLatestAssistantMessage(sessionId).catch(() => null);
+    const submitAt = this.sessionClient.getLastSubmitAt(sessionId);
     this.watches.set(watchId, {
       sessionId,
       status: "watching",
       result: null,
       error: null,
-      baselineId: baseline?.id ?? null,
+      anchorTime: submitAt ?? Date.now(),
       createdAt: Date.now(),
       resolvedAt: null,
     });
@@ -152,10 +153,10 @@ export class SessionWatcher {
         const terminal = status === "idle" || status === "aborted" || status === "awaiting_approval";
         if (!terminal) continue;
 
-        // v2.19 锚定：必须出现相对基线的新 assistant 消息才解析，
-        // 否则（陈旧 idle / 目标 turn 尚未产出）继续等待
+        // v2.19 时间锚：最新 assistant 消息必须晚于锚点（submit 或 watch 创建时刻）
+        // 才解析——2s 容差吸收事件与消息时间戳的微小偏差
         const latest = await this.sessionClient.getLatestAssistantMessage(entry.sessionId);
-        if (latest && latest.id !== entry.baselineId) {
+        if (latest && latest.createdAt >= entry.anchorTime - 2000) {
           await this.resolveWatch(watchId, entry, latest.text);
         }
       } catch {

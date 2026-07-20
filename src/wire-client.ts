@@ -107,6 +107,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   // Fix C: 0.27 忽略 agent_config.model，prompt body 必须恒带 model（有粘性，幂等）
   private sessionModels = new Map<string, string>();
   private serverDefaultModel: string | null = null;
+  // v2.19: watch 时间锚——记录每个 session 最近一次 prompt 提交时刻
+  private lastSubmittedAt = new Map<string, number>();
   // WS-pushed session state cache — zero-I/O alternative to wire.jsonl parsing
   private sessionStateCache = new Map<string, { status: string; lastTurnId?: number; lastText?: string; lastError?: string; updatedAt: number }>();
   // Optional watch output: write completion status to a file for coordinating session
@@ -672,6 +674,7 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     const model = await this.resolvePromptModel(sessionId);
     if (model) body.model = model;
 
+    this.lastSubmittedAt.set(sessionId, Date.now());
     const resp = await this.transport.apiPost<{ prompt_id: string }>(
       `/api/v1/sessions/${sessionId}/prompts`,
       body
@@ -914,12 +917,12 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   }
 
   /**
-   * 获取 session 最新一条 assistant 消息（id + 拼接文本）。
-   * 供 watch 锚定：创建 watch 时记录基线 id，仅在出现新 id 时解析（v2.19）。
+   * 获取 session 最新一条 assistant 消息（id + 拼接文本 + 创建时间 ms）。
+   * 供 watch 时间锚：仅在消息 createdAt 晚于锚点（提交时刻）时解析（v2.19）。
    */
   async getLatestAssistantMessage(
     sessionId: string
-  ): Promise<{ id: string; text: string } | null> {
+  ): Promise<{ id: string; text: string; createdAt: number } | null> {
     try {
       const resp = await this.transport.apiGet<{ items: KimiMessage[] }>(
         `/api/v1/sessions/${sessionId}/messages?page_size=1&role=assistant`
@@ -930,10 +933,15 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
         .filter((b) => b.type === "text" && b.text)
         .map((b) => b.text!)
         .join("");
-      return { id: msg.id, text };
+      return { id: msg.id, text, createdAt: Date.parse(msg.created_at) || 0 };
     } catch {
       return null;
     }
+  }
+
+  /** 最近一次通过本 client 提交 prompt 的时刻（ms），无记录返回 null（v2.19 watch 时间锚）。 */
+  getLastSubmitAt(sessionId: string): number | null {
+    return this.lastSubmittedAt.get(sessionId) ?? null;
   }
 
   /** Resolve a pending tool approval — replaces raw apiPost path construction. */

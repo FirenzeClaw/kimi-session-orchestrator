@@ -35,10 +35,12 @@ export interface ISessionClient {
     sessionId: string,
     opts?: { pageSize?: number; role?: string }
   ): Promise<KimiContentBlock[]>;
-  /** Latest assistant message (id + text) — watch 锚定用（v2.19） */
+  /** Latest assistant message (id + text + createdAt ms) — watch 时间锚用（v2.19） */
   getLatestAssistantMessage(
     sessionId: string
-  ): Promise<{ id: string; text: string } | null>;
+  ): Promise<{ id: string; text: string; createdAt: number } | null>;
+  /** 最近一次通过本 client 提交 prompt 的时刻（ms），无记录返回 null（v2.19） */
+  getLastSubmitAt(sessionId: string): number | null;
   /** Resolve an approval — replaces apiPost("/api/v1/sessions/SID/approvals/AID", ...) */
   resolveApproval(
     sessionId: string,
