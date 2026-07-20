@@ -303,7 +303,10 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
 
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.wsUrl);
+      // 0.27 起 WS 升级强制鉴权（missing_credential 拒绝）；0.22.x 容忍但也接受该头
+      const ws = new WebSocket(this.wsUrl, {
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+      });
       this.ws = ws;
 
       const timeout = setTimeout(() => {
