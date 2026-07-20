@@ -17,6 +17,11 @@ import { detectKimiServerUrl } from "./server-lock.js";
 import type { ISessionClient, IStatusClient, IPushClient } from "./types.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import type { MessageQueue } from "./message-queue.js";
+import {
+  normalizeSessionStatus,
+  type StatusEndpointBody,
+  type SessionDetailBody,
+} from "./status-normalize.js";
 
 export interface KimiContentBlock {
   type: "text" | "thinking" | "tool_use" | "tool_result";
@@ -709,12 +714,20 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     if (cached && Date.now() - cached.updatedAt < 30000) {
       return cached.status;
     }
-    // Fallback: REST API
+    // Fallback: REST API（双模型兼容，0.24+ 见 status-normalize.ts）
     try {
-      const resp = await this.transport.apiGet<{ status: string }>(
+      const statusBody = await this.transport.apiGet<StatusEndpointBody>(
         `/api/v1/sessions/${sessionId}/status`
       );
-      return resp.status || "unknown";
+      // 0.24+ busy 模型下 busy==false 时，/status 不含 pending_interaction，
+      // 需补取 session 详情区分 idle 与 awaiting_approval/awaiting_question
+      let sessionBody: SessionDetailBody | undefined;
+      if (statusBody.status === undefined && statusBody.busy === false) {
+        sessionBody = await this.transport.apiGet<SessionDetailBody>(
+          `/api/v1/sessions/${sessionId}`
+        );
+      }
+      return normalizeSessionStatus(statusBody, sessionBody);
     } catch {
       return "unknown";
     }
