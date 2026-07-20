@@ -2,6 +2,19 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.17 — 2026-07-20
+
+**Web 引擎 0.24+/0.27 适配（Kimi Server Web 重构）**
+
+- fix: `wire-client.ts` WS 握手补 `Authorization: Bearer` 头——0.27 起 WS 升级强制鉴权（`missing_credential` 拒绝），修复 `wsConnected=false` 导致的事件驱动瘫痪
+- fix: `handleDirectEvent` 并行处理 `event.session.work_changed`——0.24+ 该事件取代 `event.session.status_changed`（实测整个 turn 周期无一次旧事件），提取共享方法 `applySessionStatus()`，状态缓存与 waitForStatus resolver 恢复事件驱动
+- fix: prompt body 恒带 `model`——0.27 静默忽略 `agent_config.model`（创建/profile 均无效），空 model 的 turn 必败 `model.not_configured` 且不回落默认模型；三级解析：createSession 显式 model > server `/auth` default_model > 省略；model 有 session 级粘性（实测 `kimi-code/k3`、`deepseek/deepseek-v4-flash`、`deepseek/deepseek-v4-pro`）
+- feat: 状态归一化层 `src/status-normalize.ts`——0.22.x `status` 枚举与 0.24+ `busy`/`pending_interaction` 双模型统一映射，`getSessionStatus()` 单点接入（新模型空闲时补取 session 详情），上层零改动
+- fix: `POLL_SCRIPT` 状态判定双模型兼容 + `busy=False` 时补查 `pending_interaction`——消除 0.24+ 下 `SERVER_OFFLINE` 误报（exit 2）与审批中间态提前退出
+- docs: `API.md` 重写为 0.27.0 实测版——v2 channels 自省（37 个）、11 项破坏性变更清单、事件表/响应结构全部实测标注；新增 `docs/issues/web-engine-027-adaptation.md` 影响面分析
+- test: node:test 单测 20 例（归一化映射 / work_changed 事件 + resolver 唤醒 / model 解析链）；0.27 真实环境生产链路端到端回归通过（创建 → 注入 → 后台轮询 → 真实回复，wsConnected=true）
+- 实现计划: `docs/superpowers/plans/2026-07-20-web-engine-027-adaptation.md`、`2026-07-20-web-engine-027-runtime-fixes.md`
+
 ## v2.16 — 2026-07-16
 
 **Loop Engineering skill 套件 + Cron 调度规范**

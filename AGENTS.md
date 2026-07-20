@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 CHANGELOG.md）:
+  2026-07-20 | kimi-code (fix) | v2.17 Web 引擎 0.27 适配：WS Bearer 鉴权（missing_credential）+ work_changed 事件取代 status_changed + prompt body 恒带 model（agent_config.model 被忽略，有粘性）+ 状态归一化层 + POLL_SCRIPT 双模型；API.md 实测重写（11 项破坏性变更）；20 单测 + 生产链路回归通过
   2026-07-16 | kimi-code (docs) | Loop Engineering skill 文档同步：新增 loop-contract-from-docs/from-idea、cron-scheduler 三个 PM 级 skill；SPEC 006/007；Loop Contract 模板补 operational_brakes+harness；cron 模板补 run_lock+one-shot renewal+external_actions
   2026-07-16 | kimi-code (feat) | v2.16 预置脚本 + 降级回调：POLL_SCRIPT 常量 + existsSync 短命令分支（~/.kimi-tunnel/poll.py 存在时 ~4KB→~100 bytes）；execute_prompt/chat_with_session 自动 writeFile 写 poll.py，失败降级不阻塞；fetch_result 新增 poll-result-{sid}.txt 固定路径结果文件（PM Read 零 token）；路径 Win/Linux 规范化
   2026-07-16 | kimi-code (fix) | poll-command Bash→Python 重写（v2.15）：消除 node 依赖（换 Python json.load 读锁），新增 LOCK_LOST 重试（5×3s → exit 4），修复子 shell 变量丢失（单 Python 进程），退出码扩展为 0/2/3/4；shell wrapper 缩减为 1 行
@@ -115,6 +116,7 @@ npm run inspector    # MCP Inspector 调试模式
 2. 启动 Kimi Server: `kimi web --no-open`（Tunnel 自动从 lock 文件检测端口）
 3. 设置 token: `export KIMI_SERVER_TOKEN="<printed-at-startup>"`
 4. 启动 Tunnel: `npm start`（或配置 `KIMI_SERVER_URL` 环境变量覆盖自动检测）
+5. **Kimi Server 0.24+**：WS 强制鉴权、状态接口为 busy 模型、prompt 必须带 model——tunnel v2.17+ 已适配；低于 v2.17 的 tunnel 勿配 0.24+ server。详见 API.md §五
 <!-- AUTO:END -->
 
 ## 项目约定
