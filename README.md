@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.16-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.17-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![Python](https://img.shields.io/badge/python-%E2%89%A5%203.7-3776AB)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
@@ -167,7 +167,7 @@ L3: 学习沉淀 (learn skill → 向量库)
 
 - Node.js ≥ 22（`node:sqlite` 内置 + tsc 编译）
 - Python ≥ 3.7（后台轮询脚本 `poll_command` 运行时依赖）
-- Kimi Code CLI ≥ 0.22.3
+- Kimi Code CLI ≥ 0.22.3（0.24+/0.27 新 Web 引擎自 v2.17 起适配，见 API.md §五）
 - Git Bash（Windows）或 bash
 
 ### 环境变量

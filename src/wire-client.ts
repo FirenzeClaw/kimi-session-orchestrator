@@ -6,6 +6,11 @@
  *
  * Prerequisites: kimi web --no-open --port <port>
  * Token: printed at startup or available from the web UI URL hash.
+ *
+ * 0.24+ Web 引擎适配（v2.17）：WS 握手带 Bearer 头（强制鉴权）；状态事件为
+ * event.session.work_changed（busy 模型，取代 status_changed），经 status-normalize.ts
+ * 归一化；prompt body 恒带 model（agent_config.model 被服务端忽略，空 model turn 必败）。
+ * 详见 API.md §五。
  */
 
 import { randomUUID } from "node:crypto";

@@ -67,7 +67,8 @@ src/
 ├── policy-engine.ts         # 策略引擎：解析/检查/绑定/阻断消息
 ├── memory-store.ts          # SQLite 共享内存 CRUD + buildInjection() + 记忆profiles（v2.10：set/getMemoryProfile 移入）
 ├── server-lock.ts           # Kimi Server 端口自动检测 + stale lock 清理（v2.10：从 wire-client 提取）
-├── poll-command.ts           # 纯 Python 内联轮询脚本生成（python -c，v2.15 重写）
+├── poll-command.ts           # 纯 Python 内联轮询脚本生成（python -c，v2.15 重写，v2.17 双模型状态判定）
+├── status-normalize.ts        # Session 状态归一化：0.22.x status 枚举 / 0.24+ busy+pending_interaction 双模型统一映射（v2.17）
 ├── tools/
 │   ├── helpers.ts            # 共享工具辅助函数（v2.10：preparePrompt + ensureConnected, v2.11：injectMemoryIntoPrompt + setMemoryProfileWithExpiry）
 │   ├── manifest.ts            # 工具注册桶文件 — 统一导入点（v2.11）
@@ -144,7 +145,7 @@ npm run inspector    # MCP Inspector 调试模式
 传输层:    http-server.ts, mcp-server.ts
 工具层:    tools/*（MCP 工具注册 + helpers.ts 共享辅助）
 业务层:    wire-client.ts, session-orchestrator.ts, workflow-engine.ts, session-watcher.ts（v2.11：ISessionClient/IStatusClient/IPushClient 三接口拆分）
-数据层:    message-queue.ts, workflow-template.ts, workflow-store.ts, session-log-reader.ts, memory-store.ts, server-lock.ts, poll-command.ts, orchestration-store.ts
+数据层:    message-queue.ts, workflow-template.ts, workflow-store.ts, session-log-reader.ts, memory-store.ts, server-lock.ts, poll-command.ts, status-normalize.ts, orchestration-store.ts
 类型层:    types.ts（ISessionClient / IStatusClient / IPushClient / IMemoryStore / IWorkflowEngine 接口 + TunnelServices）
 ```
 <!-- AUTO:END -->
