@@ -210,6 +210,8 @@
 
 **pending 审批项结构**（0.27 实测）: `{approval_id, session_id, turn_id, tool_call_id, tool_name, action, tool_input_display, created_at, expires_at}`（`approval_id` 即 tool_call_id；`action` 为人类可读描述如 `"Running: echo hello"`；`expires_at` 约 24h）
 
+> **`scope: "session"` 实测语义（0.27）**: 白名单按**精确 action 字符串**匹配——scope 放行 `"Running: echo one"` 后，重跑 `echo one` 免审批，但 `echo two`（不同 action）仍需单独审批。session 详情的 `permission_rules` 字段**不回显**此类规则（非失效，实测白名单真实生效）。
+
 ---
 
 ### 1.8 Questions — 用户提问

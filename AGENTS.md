@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 CHANGELOG.md）:
+  2026-07-20 | kimi-code (fix) | v2.19 watch 时间锚 + approval scope 透传：watch_session 过早解析根治（submit 时刻锚 + 消息 createdAt 判定，防陈旧 idle/快 turn 竞态）+ resolveWatch 取最新消息 + getCachedStatus 30s TTL；scope 实测语义=精确 action 匹配；38 单测 + 真实 e2e
   2026-07-20 | kimi-code (feat) | v2.18 适配收尾：watch 重置兜底 turn.started（0.27 无 prompt.submitted）+ sendPrompt turn 失败显式报错（lastError 生命周期）+ session-retire 接入 :export/:archive 服务端归档；grade_step/run_flow/watch e2e 复验通过；32 单测
   2026-07-20 | kimi-code (fix) | v2.17 Web 引擎 0.27 适配：WS Bearer 鉴权（missing_credential）+ work_changed 事件取代 status_changed + prompt body 恒带 model（agent_config.model 被忽略，有粘性）+ 状态归一化层 + POLL_SCRIPT 双模型；API.md 实测重写（11 项破坏性变更）；20 单测 + 生产链路回归通过
   2026-07-16 | kimi-code (docs) | Loop Engineering skill 文档同步：新增 loop-contract-from-docs/from-idea、cron-scheduler 三个 PM 级 skill；SPEC 006/007；Loop Contract 模板补 operational_brakes+harness；cron 模板补 run_lock+one-shot renewal+external_actions
@@ -61,7 +62,7 @@ src/
 ├── workflow-template.ts     # 模板类型定义 + YAML 解析 + Zod 校验
 ├── workflow-store.ts        # 模板持久化（CRUD：list/load/save/delete）
 ├── workflow-engine.ts       # 自适应工作流引擎：创建session→逐步驱动→阻塞处理→恢复
-├── session-watcher.ts        # WS 事件驱动后台监听：每3s检查状态，完成时自动拉取回复
+├── session-watcher.ts        # WS 事件驱动后台监听：每3s检查状态，时间锚（submit 时刻）判定完成后拉取回复（v2.19 防过早解析）
 ├── policy-types.ts          # 策略类型定义 + Zod schema + 已知工具清单
 ├── policy-builtins.ts       # 3个内置策略（read-only/safe-edit/full-access）
 ├── policy-store.ts          # YAML策略文件CRUD（.kimi-tunnel/policies/）+ 校验
