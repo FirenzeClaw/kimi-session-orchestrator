@@ -110,6 +110,7 @@ description: Use when retiring a task session and spawning a successor with full
      -H "Content-Type: application/json" -d '{}' \
      "http://127.0.0.1:${PORT}/api/v1/sessions/<retiring_id>/export" \
      -o ~/.kimi-tunnel/export-<retiring_id>.zip
+   # 验证：建议 unzip -l 或检查文件大小；export 失败（老引擎 404 会把错误 JSON 写入 zip）不影响后续 archive 步骤
 
    # 归档（归档后 session 从 REST 列表消失，wire.jsonl 仍保留在磁盘）
    curl -s -X POST -H "Authorization: Bearer $(cat ~/.kimi-code/server.token)" \
@@ -156,7 +157,7 @@ description: Use when retiring a task session and spawning a successor with full
 ### Phase 4 — 启动接班 session
 
 ```
-⑦ create_session(
+⑧ create_session(
      cwd="<退役 session 的 cwd，直接复制，不推导>",  ← 从 Phase 1 获取，一字不改
      permission_mode="auto",
      memory_level="full",
@@ -164,7 +165,7 @@ description: Use when retiring a task session and spawning a successor with full
    )
    → 返回 new_session_id
 
-⑧ execute_prompt(
+⑨ execute_prompt(
      session_id="<new_session_id>",
      prompt="<7-block 模板>
 
@@ -227,7 +228,7 @@ description: Use when retiring a task session and spawning a successor with full
 | 退役 session 仍活跃（未 idle） | 等待其完成当前 turn → 继续。不强制中断正在执行的 session。 |
 | 批量退役多个 session | 逐个处理。每个完整的 Phase 1→5 后再开始下一个。汇报时汇总。 |
 | **退役 session 在子项目路径** | cwd 是退役 session 实际工作目录（如 D:/code/cli-research/mycli），不是项目根（D:/code/cli-research），更不是 PM 项目根（D:/code/kimi-session-orchestrator） | Phase 1 步骤 1 wirePath 解析出末段目录名 → 步骤 2 pwd 确认 → 步骤 3 交叉验证。IO 中频繁出现的子目录路径不能作为 cwd；v2.13 双层记忆自动按 cwd 选正确的 memory.db |
-| 服务端 `:archive` 失败（老引擎/网络异常） | 归档是增强而非必需：wire.jsonl 仍在磁盘，list_sessions 走文件解析不受影响 | Phase 2 步骤⑦捕获非 0 code 即降级，继续 Phase 3，汇报注明 |
+| 服务端 `:archive` 失败（老引擎/网络异常） | 归档是增强而非必需：wire.jsonl 仍在磁盘，list_sessions 走文件解析不受影响 | Phase 2 步骤⑦捕获非 0 code 或 curl 无响应即降级，继续 Phase 3，汇报注明 |
 
 ## Common Mistakes
 
