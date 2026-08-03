@@ -17,7 +17,13 @@ export function registerCreateSession(server: McpServer, services: TunnelService
         .enum(["manual", "yolo", "auto"])
         .default("auto")
         .describe("权限模式：auto=自动审批所有工具调用，manual=需确认，yolo=超级自动"),
-      model: z.string().optional().describe("模型标识符，如 deepseek/deepseek-v4-pro"),
+      model: z
+        .string()
+        .optional()
+        .describe(
+          '模型标识符，取 list_models 返回值（如 deepseek/flash、deepseek/pro、kimi-code/k3）。' +
+          '旧名 deepseek/deepseek-v4-* 已失效；不传则用 server 默认。模型在首次 prompt 提交时生效并具 session 粘性。'
+        ),
       thinking: z
         .enum(["off", "low", "medium", "high", "xhigh", "max"])
         .optional()
@@ -53,6 +59,21 @@ export function registerCreateSession(server: McpServer, services: TunnelService
       }
 
       try {
+        // v2.22: model 有效性前置校验（不阻断）——传失效名（如旧 deepseek-v4-*）首次 turn 必败，提前警告
+        let modelWarning: string | undefined;
+        if (model) {
+          try {
+            const models = await wireClient.listModels();
+            if (models.length > 0 && !models.some((m) => m.model === model)) {
+              modelWarning =
+                `model "${model}" 不在当前可用列表（可用: ${models.map((m) => m.model).join("、")}）。` +
+                `创建已继续，但首次提交 prompt 的 turn 可能因模型无效而失败；可先调用 list_models 确认。`;
+            }
+          } catch {
+            // 校验失败（wire 异常）不阻断创建
+          }
+        }
+
         const pmSessionId = wireClient.getPmSessionId();
         const result = await wireClient.createSession({
           cwd,
@@ -96,6 +117,7 @@ export function registerCreateSession(server: McpServer, services: TunnelService
                   cwd,
                   permission_mode,
                   policy: policy || "full-access (default)",
+                  ...(modelWarning ? { model_warning: modelWarning } : {}),
                 },
                 null,
                 2

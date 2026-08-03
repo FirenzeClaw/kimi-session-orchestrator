@@ -59,9 +59,21 @@ export interface ISessionClient {
 }
 
 /** Session status queries — used by monitoring tools. */
+/** GET /api/v1/models 单项（0.31.1 实测字段，create_session 的 model 参数取 model 字段） */
+export interface ModelInfo {
+  provider: string;
+  model: string;
+  display_name?: string;
+  max_context_size?: number;
+  capabilities?: string[];
+  [key: string]: unknown;
+}
+
 export interface IStatusClient {
   getSessionStatus(sessionId: string): Promise<string>;
   getCachedStatus(sessionId: string): string | null;
+  listModels(): Promise<ModelInfo[]>;
+  clearModelsCache(): void;
 }
 
 /** Wire lifecycle + push events — used by index.ts and session-watcher. */

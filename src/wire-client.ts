@@ -19,7 +19,7 @@ import { dirname } from "node:path";
 import { WebSocket } from "ws";
 import { WireTransport } from "./wire-transport.js";
 import { detectKimiServerUrl } from "./server-lock.js";
-import type { ISessionClient, IStatusClient, IPushClient } from "./types.js";
+import type { ISessionClient, IStatusClient, IPushClient, ModelInfo } from "./types.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import type { MessageQueue } from "./message-queue.js";
 import {
@@ -107,6 +107,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   private statusResolvers = new Map<string, Array<{ resolve: (v: string) => void; reject: (e: Error) => void }>>();
   // Fix C: 0.27 忽略 agent_config.model，prompt body 必须恒带 model（有粘性，幂等）
   private sessionModels = new Map<string, string>();
+  /** 模型列表缓存（v2.22：listModels TTL 30s，list_models 工具与 create_session 校验共用） */
+  private modelsCache: { list: ModelInfo[]; fetchedAt: number } | null = null;
   private serverDefaultModel: string | null = null;
   // v2.19: watch 时间锚——记录每个 session 最近一次 prompt 提交时刻
   private lastSubmittedAt = new Map<string, number>();
@@ -811,6 +813,31 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     } catch {
       return "unknown";
     }
+  }
+
+  /**
+   * 列出当前 Kimi Server 可用模型（GET /api/v1/models）。
+   * 30s TTL 缓存——list_models 工具与 create_session 校验共用（v2.22）。
+   */
+  async listModels(): Promise<ModelInfo[]> {
+    const now = Date.now();
+    if (this.modelsCache && now - this.modelsCache.fetchedAt < 30000) {
+      return this.modelsCache.list;
+    }
+    try {
+      const data = await this.transport.apiGet<{ items?: ModelInfo[] }>("/api/v1/models");
+      const list = data?.items ?? [];
+      this.modelsCache = { list, fetchedAt: now };
+      return list;
+    } catch {
+      // 拉取失败：返回缓存（如有），否则空列表（调用方自行降级）
+      return this.modelsCache?.list ?? [];
+    }
+  }
+
+  /** 强制清空模型列表缓存（list_models 的 refresh=true 时调用） */
+  clearModelsCache(): void {
+    this.modelsCache = null;
   }
 
   /** Get cached status for any session (WebSocket push). Returns null if never seen or stale (>30s). */

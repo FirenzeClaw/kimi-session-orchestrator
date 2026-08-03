@@ -6,10 +6,10 @@
 [![Version](https://img.shields.io/badge/version-v2.21-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![Python](https://img.shields.io/badge/python-%E2%89%A5%203.7-3776AB)]()
-[![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
+[![MCP Tools](https://img.shields.io/badge/MCP%20tools-16%2B14-orange)]()
 [![Skills](https://img.shields.io/badge/skills-10-blue)]()
 
-**Kimi Code CLI 的 Loop Engineering PM 编排系统。** 29 个 MCP 工具——不手动 prompt Agent，而是设计自动 prompt Agent 的循环系统。
+**Kimi Code CLI 的 Loop Engineering PM 编排系统。** 16 核心 + 14 可选 MCP 工具（可选组按部署开关，见 [可选工具部署](#可选工具部署)）——不手动 prompt Agent，而是设计自动 prompt Agent 的循环系统。
 
 ## 解决什么问题
 
@@ -86,13 +86,16 @@ npm start
 | 类别 | 工具 | 
 |------|------|
 | **Session** | `create_session` `list_sessions` `get_session_info` `get_tunnel_status` |
-| **任务** | `execute_prompt` `chat_with_session` `run_flow` `execute_workflow` `continue_workflow` |
-| **监控** | `poll_session` `list_io_records` `read_session_log` `watch_session` `get_watch_result` |
+| **任务** | `execute_prompt` · `chat_with_session`* `run_flow`* `execute_workflow`* `continue_workflow`* |
+| **监控** | `poll_session` `list_io_records` `read_session_log` · `watch_session`* `get_watch_result`* |
+| **模型** | `list_models` — 列出可用模型别名（create_session 的 model 参数取值来源） |
 | **记忆** | `memory_set` `memory_get` `memory_list` `memory_delete` `memory_status` `memory_archive` |
 | **验证** | `grade_step` — LLM 自动评分（pass/fail + 详细反馈） |
-| **权限** | `list_policies` `approve_tool` `deny_tool` |
-| **工作流** | `learn_workflow` `list_templates` |
-| **推送** | `stream_response` `set_watch_output` |
+| **权限** | `list_policies`* `approve_tool`* `deny_tool`* |
+| **工作流** | `learn_workflow`* `list_templates`* |
+| **推送** | `stream_response`* `set_watch_output`* |
+
+`*` = 可选工具（默认注册，`KIMI_TUNNEL_OPTIONAL_TOOLS=core` 时关闭，见下方章节）
 
 完整工具参数见 [API.md](API.md)。
 
@@ -186,6 +189,37 @@ L3: 学习沉淀 (learn skill → 向量库)
 | `KIMI_SERVER_URL` | 否 | 自动检测 | 覆盖 Kimi Server 地址（端口自动从 lock 检测） |
 | `TUNNEL_PORT` | 否 | `3456` | Tunnel HTTP/WS 监听端口 |
 | `KIMI_CODE_HOME` | 否 | `~/.kimi-code` | Kimi Code 数据目录 |
+| `KIMI_TUNNEL_OPTIONAL_TOOLS` | 否 | `all` | 可选工具开关：`all`=注册全部 30 个；`core`=仅 16 个核心工具（见下节） |
+
+### 可选工具部署
+
+v2.23 起，14 个低使用率工具（使用率统计 0 次）拆为**可选组**，默认随 MCP server 注册；设 `KIMI_TUNNEL_OPTIONAL_TOOLS=core` 可整体关闭，仅保留 16 个核心工具（session 生命周期 + 监控 + 记忆 + 验证 + 模型）。
+
+| 类别 | 可选工具 | 说明 |
+|------|---------|------|
+| 审批流 | `list_policies` `approve_tool` `deny_tool` | manual session + 策略审批路径（需配合 policy 使用） |
+| 工作流引擎 | `learn_workflow` `list_templates` `execute_workflow` `continue_workflow` `run_flow` `chat_with_session` | 模板驱动多步编排（实际使用走 execute_prompt + 后台轮询路线） |
+| watch 族 | `watch_session` `get_watch_result` `continue_watch` `set_watch_output` | MCP 内部轻量监听（备选方案） |
+| 推送 | `stream_response` | WS 外部调试客户端推送 |
+
+**启用/禁用**（`~/.kimi-code/mcp.json` 的 `env`）：
+
+```json
+{
+  "mcpServers": {
+    "kimi-session-orchestrator": {
+      "command": "node",
+      "args": ["<绝对路径>/dist/index.js"],
+      "env": {
+        "KIMI_SERVER_TOKEN": "<token>",
+        "KIMI_TUNNEL_OPTIONAL_TOOLS": "core"
+      }
+    }
+  }
+}
+```
+
+修改后 `/reload` 生效。源码保留在 `src/tools/`（可选 ≠ 删除），需要时改回 `all` 即可。协议级验证：`core` 模式注册 16 个、默认 30 个。
 
 ### 部署红线
 
@@ -204,7 +238,7 @@ L3: 学习沉淀 (learn skill → 向量库)
 
 ```
 src/          — TypeScript 核心（index, mcp-server, wire-client, workflow-engine, memory-store 等）
-  tools/      — 29 个 MCP 工具
+  tools/      — 16 核心 + 14 可选 MCP 工具（可选组开关见「可选工具部署」）
 shared/       — 浏览器端 JS（API 客户端、状态管理、渲染、注入）
 ext/          — Chrome MV3 扩展
 userscript/   — Tampermonkey 用户脚本

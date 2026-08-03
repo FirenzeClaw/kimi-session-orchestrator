@@ -188,7 +188,7 @@
 ```
 **响应 data**（0.27 实测）: `{ prompt_id, user_message_id, status: "running", content: [...], created_at }`
 
-> ⛔ **model 行为（0.27 实测）**: prompt body 的 `model` 字段是**唯一有效**的模型指定方式——`agent_config.model`（创建/profile）被静默忽略；model 设置后有 session 级粘性，后续 prompt 免带。实测可用：`kimi-code/k3`、`deepseek/deepseek-v4-flash`、`deepseek/deepseek-v4-pro`。
+> ⛔ **model 行为（0.27/0.31.1 实测）**: prompt body 的 `model` 字段是**唯一有效**的模型指定方式——`agent_config.model`（创建/profile）被静默忽略（0.31.1 复测仍忽略）；model 设置后有 session 级粘性，后续 prompt 免带。模型名称以 `GET /api/v1/models` 的 `model` 字段为准（`provider/别名` 格式）。0.31.1 实测有效：`deepseek/flash`（server 默认）、`deepseek/pro`、`kimi-code/k3`、`kimi-code/k3-256k`、`kimi-code/kimi-for-coding`、`kimi-code/kimi-for-coding-highspeed`、`lmuai/kimi-k3`、`stepfun/step-3.7-flash`、`stepfun/step-3.5-flash`、`poke2api/gpt-5.6-sol`；**0.27 时代的 `deepseek/deepseek-v4-*` 已失效**（0.29→0.31 别名改版，未声明，提交报错）。
 
 ---
 
@@ -319,7 +319,7 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/models` | 列出模型别名（0.27.0 实测 `{items[]}`） |
+| GET | `/api/v1/models` | 列出模型别名（0.27.0 实测 `{items[]}`；0.31.1 实测 10 个：`lmuai/kimi-k3`、`deepseek/flash`、`deepseek/pro`、`stepfun/step-3.7-flash`、`stepfun/step-3.5-flash`、`kimi-code/kimi-for-coding`、`kimi-code/kimi-for-coding-highspeed`、`kimi-code/k3`、`kimi-code/k3-256k`、`poke2api/gpt-5.6-sol`） |
 | POST | `/api/v1/models/{tail}` | 设置全局默认模型 |
 | GET | `/api/v1/providers` | 列出 providers（0.27.0 实测 `{items[]}`） |
 | POST | `/api/v1/providers{refresh_oauth}` | 刷新 OAuth provider 模型元数据 |
@@ -483,7 +483,7 @@ S→C  {"type":"ack","id":"s1","code":0,"msg":"success",
 | 8 | **v2 channel RPC 层引入**（37 channels + /api/v2/ws） | 未来迁移方向 | 暂保持 v1；v2/ws 帧格式待官方文档 |
 | 9 | **WS 升级强制鉴权**（0.27 实测：无 Authorization 头直接 `missing_credential` 拒绝；0.22.x 容忍） | `wire-client.ts wsConnect`（0.22.x 起即未带头） | 握手必须带 `Authorization: Bearer`（v2.17 已修） |
 | 10 | **`event.session.status_changed` 被 `event.session.work_changed` 取代**（0.27 实测整个 turn 周期无一次 status_changed；work_changed 载荷 `{busy, main_turn_active, pending_interaction, last_turn_reason}`） | `wire-client.ts handleDirectEvent` 状态缓存与 resolver | 并行处理两事件，work_changed 经归一化映射（v2.17 已修） |
-| 11 | **`agent_config.model` 被静默忽略**（创建/profile 更新均无效仍 `""`；空 model turn 必败 `model.not_configured`，不回落 server 默认模型） | `createSession` / prompt 提交 | prompt body 恒带 `model`（有粘性，幂等）；实测 `kimi-code/k3`、`deepseek/deepseek-v4-flash`、`deepseek/deepseek-v4-pro` 可用（v2.17 已修） |
+| 11 | **`agent_config.model` 被静默忽略**（创建/profile 更新均无效仍 `""`；空 model turn 必败 `model.not_configured`，不回落 server 默认模型） | `createSession` / prompt 提交 | prompt body 恒带 `model`（有粘性，幂等）；模型名以 `GET /api/v1/models` 的 `model` 字段为准；0.31.1 实测 `deepseek/flash`、`deepseek/pro`、`kimi-code/k3` 可用（旧 `deepseek/deepseek-v4-*` 已失效）（v2.17 已修） |
 
 > **0.29.0 变更**：Server 不再写入 `~/.kimi-code/server/lock`，仅写入 `server/instances/<id>.json`（新增 `server_id`、`heartbeat_at`、`host_version` 字段；`started_at` 从 string 改为 epoch ms number）。`server-lock.ts` 已适配双格式回退（legacy lock → instances/ → fallback），并新增 `heartbeat_at` 超时检测（30s 无心跳视为 stale 实例）。
 

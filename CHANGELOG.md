@@ -2,6 +2,24 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.23 — 2026-08-03
+
+**可选工具部署：审批流/工作流引擎/watch族/推送 14 工具可选化（使用率统计驱动）**
+
+- feat: `KIMI_TUNNEL_OPTIONAL_TOOLS` 开关——`core` 仅注册 16 个核心工具（session 生命周期 + 监控 + 记忆 + 验证 + 模型），默认 `all` 注册全部 30 个；`tools/manifest.ts` 拆 `registerCoreTools`/`registerOptionalTools` 分组 + `CORE_TOOLS`/`OPTIONAL_TOOLS` 清单
+- 可选组（14）：审批流（`list_policies`/`approve_tool`/`deny_tool`）、工作流引擎（`learn_workflow`/`list_templates`/`execute_workflow`/`continue_workflow`/`run_flow`/`chat_with_session`）、watch 族（`watch_session`/`get_watch_result`/`continue_watch`/`set_watch_output`）、推送（`stream_response`）——依据 278 个会话日志使用率统计（714 次调用中 0 次）拆分；源码保留，可选 ≠ 删除
+- docs: README 新增「可选工具部署」章节（四类清单 + mcp.json 配置示例）；工具概览表 `*` 标注可选
+- test: 协议级验证——MCP Client 实测默认 30 个 / core 模式 16 个（含跳过日志）；46/46 单测全绿
+
+## v2.22 — 2026-08-03
+
+**list_models 工具 + create_session model 校验（0.31.1 模型名改版适配）**
+
+- feat: 新增 `list_models` 工具——实时列出 `GET /api/v1/models` 可用模型别名（30s TTL 缓存 + `refresh` 强制刷新）；0.31.1 实测 10 个：`deepseek/flash`（server 默认）、`deepseek/pro`、`kimi-code/k3`、`kimi-code/k3-256k`、`kimi-code/kimi-for-coding` 等；旧名 `deepseek/deepseek-v4-*` 已失效
+- feat: `create_session` 的 `model` 参数运行时校验——不在有效列表时返回 `model_warning`（不阻断创建），把"旧名导致首次 turn 失败"前置为创建时即时提示；描述精简并指向 `list_models`
+- docs: API.md §1.17 models 端点补 0.31.1 完整列表；README/AGENTS 工具数 29→30
+- test: +3（listModels TTL 缓存命中 / clearModelsCache 重拉 / 失败降级空列表），46/46 全绿
+
 ## v2.21 — 2026-08-03
 
 **0.31.1 适配：busy 语义漂移修正（execute_prompt 假超时根治）**
