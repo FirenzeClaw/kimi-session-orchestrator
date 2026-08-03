@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.19-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.21-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![Python](https://img.shields.io/badge/python-%E2%89%A5%203.7-3776AB)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-orange)]()
@@ -153,13 +153,13 @@ L3: 学习沉淀 (learn skill → 向量库)
 
 | 文档 | 说明 |
 |------|------|
-| [API.md](API.md) | Kimi Server API 0.27.0 实测版（v1 REST + v1/v2 WS，含 11 项破坏性变更清单） |
+| [API.md](API.md) | Kimi Server API 0.27.0 实测版（v1 REST + v1/v2 WS，含 11 项破坏性变更清单；0.31.1 busy 漂移增量实测见 §五） |
 | [docs/coordinator-guide.md](docs/coordinator-guide.md) | PM 统筹准入规范 |
 | [docs/loop-engineering-analysis.md](docs/loop-engineering-analysis.md) | Loop Engineering 概念与项目对照 |
 | [docs/loop-engineering-reference.md](docs/loop-engineering-reference.md) | Loop Engineering 全面参考（16 章，7 篇来源聚合） |
 | [specs/](specs/) | 7 个功能规格（001-007，含 cross-model grader 与 cron-scheduler） |
 | [docs/superpowers/specs/](docs/superpowers/specs/) | 架构设计文档（含 Loop Contract 双 Skill 设计） |
-| [docs/issues/](docs/issues/) | 已修复问题记录（6 个，含 0.27 Web 引擎适配全记录） |
+| [docs/issues/](docs/issues/) | 已修复问题记录（7 个，含 0.27 Web 引擎适配与 0.31.1 busy 漂移全记录） |
 
 ## 远期调研（Roadmap)
 
@@ -175,7 +175,7 @@ L3: 学习沉淀 (learn skill → 向量库)
 
 - Node.js ≥ 22（`node:sqlite` 内置 + tsc 编译）
 - Python ≥ 3.7（后台轮询脚本 `poll_command` 运行时依赖）
-- Kimi Code CLI ≥ 0.22.3（0.24+/0.27 新 Web 引擎自 v2.17 起适配，见 API.md §五）
+- Kimi Code CLI ≥ 0.22.3（0.24+/0.27 新 Web 引擎自 v2.17 起适配；0.31.1 busy 语义漂移自 v2.21 起适配，见 API.md §五）
 - Git Bash（Windows）或 bash
 
 ### 环境变量

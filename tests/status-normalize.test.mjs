@@ -50,6 +50,40 @@ test("busy model: busy=false + question → awaiting_question", () => {
   );
 });
 
+// ── 0.31+ 适配：busy 含后台任务/持续活动，main_turn_active 才是主 turn 信号（v2.21） ──
+test("0.31: busy=true + main_turn_active=false → idle（后台任务不阻塞判定）", () => {
+  assert.equal(
+    normalizeSessionStatus({ busy: true }, { main_turn_active: false }),
+    "idle"
+  );
+});
+test("0.31: busy=true + main_turn_active=true → running", () => {
+  assert.equal(
+    normalizeSessionStatus({ busy: true }, { main_turn_active: true }),
+    "running"
+  );
+});
+test("0.31: busy=false + main_turn_active=false → idle", () => {
+  assert.equal(
+    normalizeSessionStatus({ busy: false }, { main_turn_active: false }),
+    "idle"
+  );
+});
+test("0.31: pending_interaction 仍优先于 main_turn_active", () => {
+  assert.equal(
+    normalizeSessionStatus({ busy: true }, { main_turn_active: true, pending_interaction: "approval" }),
+    "awaiting_approval"
+  );
+  assert.equal(
+    normalizeSessionStatus({ busy: true }, { main_turn_active: false, pending_interaction: "question" }),
+    "awaiting_question"
+  );
+});
+test("0.31: main_turn_active 缺失 → 回退 busy（0.24-0.30 兼容）", () => {
+  assert.equal(normalizeSessionStatus({ busy: true }, {}), "running");
+  assert.equal(normalizeSessionStatus({ busy: false }, {}), "idle");
+});
+
 // ── 边界：两模型字段都缺失 → unknown（不误判） ──
 test("edge: empty body → unknown", () => {
   assert.equal(normalizeSessionStatus({}), "unknown");

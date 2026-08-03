@@ -2,6 +2,18 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.21 — 2026-08-03
+
+**0.31.1 适配：busy 语义漂移修正（execute_prompt 假超时根治）**
+
+- fix: `busy` 字段语义漂移（0.31.1，changelog 未声明）——实测 `busy` 含后台任务/持续活动，主 turn 结束后仍为 `true`（running 后台任务存在时 busy 常驻 true），v2.20 的 `busy==true → running` 判定把空闲 session 误判为忙碌：`execute_prompt` 前置等待吃满 60s → MCP 30s 协议超时（`-32001`）→ 60s 后仍静默提交（客户端已断开，造成「报错但实际已注入」+ poll_command 丢失）；`poll.py` 同步永不判定 idle → `[POLL_TIMEOUT]`。修复：判定改 `main_turn_active`（0.27 起字段，实测可靠）优先于 `busy`——`status-normalize.ts` + `poll-command.ts` POLL_SCRIPT 双处
+- fix: `submitPrompt` 前置等待上限 60s → 25s（< MCP 30s 协议超时），busy 场景 25s 内快速失败并明确报错（`Session is busy (status: ...)`），不再静默等满后提交；移除 autoApprove 二次重试分支（58s 无意义等待）；`sendPrompt` Step 0 同步 25s
+- fix: poll-result 失败标记——`fetch_result` 请求异常或无文本时写 `[POLL_FETCH_FAILED] {原因} @ {时间}` 覆盖旧文件，防 PM 误读上次残留结果（真实 poll 验证）
+- fix: `handleDirectEvent` work_changed 归一化漏传 `main_turn_active`——0.31.1 事件载荷 `busy:true + main_turn_active:false`（后台任务 running）被误判 `running` 写入状态缓存，fast path 命中后 `execute_prompt` 仍等满 25s 报 busy；补传后事件路径与 REST 路径判定一致（WS 事件实测：0.31.1 work_changed 推送正常，此前"事件断链"判断为误报）
+- 实测确认: WS v1 订阅后 0.31.1 不推送 `work_changed`（25s 窗口零事件，期间有真实 turn 变化）——状态等待依赖事件推送的机制退化，轮询兜底（1s REST）保持可用；WS 逆向并入 v2 channel 调研
+- test: status-normalize 新增 5 例 0.31 场景（busy+mta 组合、pi 优先、mta 缺失回退）
+- docs: API.md §4.2/§五 新增 0.31.1 实测漂移说明
+
 ## v2.19 — 2026-07-20
 
 **watch 过早解析修复 + approval scope 透传（功能性回归测试副产）**

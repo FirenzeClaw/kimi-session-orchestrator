@@ -3,12 +3,13 @@
 > 版本: 0.27.0（0.24.x Web 引擎重构后） | 协议: REST + WebSocket（v1 事件推送 / v2 channel RPC）
 > 核实方式: 0.27.0 实测探测（隔离 KIMI_CODE_HOME 实例，2026-07-20）+ 二进制路由字符串比对；标注 ⚠️ 的为推断或未完全验证项
 > 旧版参考: 0.22.3 文档见 git 历史；破坏性变更见文末「五、0.22.3 → 0.27.0 破坏性变更」
+> 增量实测: 0.31.1（2026-08-03 真实环境）busy 语义漂移 + WS 事件流确认，见 §五 末尾「0.31.1 变更」段
 
 ---
 
 ## 通用约定
 
-- **Base URL**: `http://127.0.0.1:<port>` — 端口不再固定 5494，从 `~/.kimi-code/server/lock` 读取（`{pid, started_at, host, port, host_version, entry}`）
+- **Base URL**: `http://127.0.0.1:<port>` — 端口不再固定 5494，0.29+ 从 `~/.kimi-code/server/instances/<id>.json` 读取（`{server_id, pid, host, port, started_at, heartbeat_at, host_version}`），<0.29 兼容 `~/.kimi-code/server/lock`（`{pid, started_at, host, port, host_version, entry}`）
 - **认证**: `Authorization: Bearer <token>` header；token 持久化于 `~/.kimi-code/server.token`，可用 `kimi server rotate-token` 轮换
 - **响应信封**: 所有 REST 响应包裹在 `{ code: 0, msg: "success", data: {...}, request_id: "..." }` 中
 - **`code: 0`** = 成功，非 0 = 错误（`40001` 参数校验失败、`40101` 未认证、`40110` 未配置 provider、`50001` 通用错误）
@@ -447,13 +448,16 @@ S→C  {"type":"ack","id":"s1","code":0,"msg":"success",
 5. REST: GET /sessions/{id}/messages → 获取回复
 ```
 
-### 4.2 状态轮询（0.27 新判定方式）
+### 4.2 状态轮询（0.27 新判定方式 / 0.31.1 漂移修正）
 
 ```
 旧 (0.22.3): GET /status → data.status == "idle" / "awaiting_approval"
 新 (0.27.0): GET /status → data.busy == false 即空闲
              GET /sessions/{id} → pending_interaction != "none" 即等待人工介入
              （awaiting_approval = pending_interaction == "approval"，实测确认；审批/提问期间 busy 仍为 true，pi 优先于 busy）
+0.31.1 实测: data.busy 语义扩大——含后台任务/持续活动，turn 结束后仍可能为 true；
+             主 turn 判定须用详情 main_turn_active（0.27 起字段存在，v2.21 起启用）
+             → 判定优先级：status 枚举 > pending_interaction > main_turn_active > busy
 ```
 
 ### 4.3 自动审批模式
@@ -469,7 +473,7 @@ S→C  {"type":"ack","id":"s1","code":0,"msg":"success",
 
 | # | 变更 | 影响面 | 适配建议 |
 |---|------|--------|----------|
-| 1 | **`GET /status` 移除 `data.status`**，改为 `{busy, thinking_level, permission, plan_mode, swarm_mode, context_tokens, max_context_tokens, context_usage}` | `wire-client.ts getSessionStatus()`、`poll-command.ts` Python 轮询 | `idle` 判定改 `busy==false`；`aborted` 需另找信号（turn.ended reason / snapshot）⚠️ |
+| 1 | **`GET /status` 移除 `data.status`**，改为 `{busy, thinking_level, permission, plan_mode, swarm_mode, context_tokens, max_context_tokens, context_usage}` | `wire-client.ts getSessionStatus()`、`poll-command.ts` Python 轮询 | `idle` 判定改 `busy==false`；0.31+ 改 `main_turn_active==false`（busy 含后台任务，v2.21）；`aborted` 需另找信号（turn.ended reason / snapshot）⚠️ |
 | 2 | **Session 对象移除 `status`**，新增 `busy` / `main_turn_active` / `pending_interaction` / `archived` / `last_turn_reason`（`last_prompt` 保留） | 所有读 session 详情的代码 | 状态机改三元组推导 |
 | 3 | **WS 确认帧统一为 `{"type":"ack"}`**，不再有 `subscribe_ack` 等专用帧 | 无直接破坏（现有代码只等 `server_hello`，不匹配 ack 类型）；仅未来新增订阅确认逻辑时需适配 | 按帧 `id` 关联，勿匹配 `subscribe_ack` |
 | 4 | **`approvals` / `questions` 列表强制 `?status=pending`** | `approve_tool` / `deny_tool` 相关轮询 | 查询必须带 `status=pending` |
@@ -481,7 +485,9 @@ S→C  {"type":"ack","id":"s1","code":0,"msg":"success",
 | 10 | **`event.session.status_changed` 被 `event.session.work_changed` 取代**（0.27 实测整个 turn 周期无一次 status_changed；work_changed 载荷 `{busy, main_turn_active, pending_interaction, last_turn_reason}`） | `wire-client.ts handleDirectEvent` 状态缓存与 resolver | 并行处理两事件，work_changed 经归一化映射（v2.17 已修） |
 | 11 | **`agent_config.model` 被静默忽略**（创建/profile 更新均无效仍 `""`；空 model turn 必败 `model.not_configured`，不回落 server 默认模型） | `createSession` / prompt 提交 | prompt body 恒带 `model`（有粘性，幂等）；实测 `kimi-code/k3`、`deepseek/deepseek-v4-flash`、`deepseek/deepseek-v4-pro` 可用（v2.17 已修） |
 
-> 锁文件（`~/.kimi-code/server/lock`）格式不变（`{pid, started_at, host, port, host_version, entry}`），`server-lock.ts` 端口检测无需改动。
+> **0.29.0 变更**：Server 不再写入 `~/.kimi-code/server/lock`，仅写入 `server/instances/<id>.json`（新增 `server_id`、`heartbeat_at`、`host_version` 字段；`started_at` 从 string 改为 epoch ms number）。`server-lock.ts` 已适配双格式回退（legacy lock → instances/ → fallback），并新增 `heartbeat_at` 超时检测（30s 无心跳视为 stale 实例）。
+
+> **0.31.1 变更（v2.21 适配，changelog 未声明）**：`GET /status` 的 `busy` 语义扩大——含后台任务/持续活动，主 turn 结束后仍可能为 `true`（实测：running 后台任务存在时 busy 常驻 true，`main_turn_active` 随主 turn 波动）。空闲判定必须改用详情字段 `main_turn_active`（0.27 起存在）：`main_turn_active==false` 即主 turn 空闲（此时 busy 可能仍 true）。另实测：WS v1 订阅后不推送 `event.session.work_changed`（25s 窗口零事件，期间有真实 turn 状态变化）——状态缓存与等待依赖事件推送的机制在 0.31.1 退化为轮询兜底（`waitForStatus` 1s REST 轮询可用）。修复：`status-normalize.ts` / `poll-command.ts` 判定改 `main_turn_active` 优先；`submitPrompt` 前置等待上限 60s → 25s（< MCP 30s 协议超时），busy 场景快速失败并明确报错，不再静默等满后提交。
 
 ---
 

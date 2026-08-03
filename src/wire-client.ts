@@ -88,6 +88,7 @@ interface SessionEvent {
 
 export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   private baseUrl: string;
+  private explicitBaseUrl: boolean; // true when KIMI_SERVER_URL env is explicitly set
   private token: string;
   private sessionId: string;
   private sessionPermissionMode: string | null = null;
@@ -129,6 +130,7 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
   private messageQueue: MessageQueue | null = null;
 
   constructor(sessionId?: string) {
+    this.explicitBaseUrl = !!process.env.KIMI_SERVER_URL;
     this.baseUrl =
       process.env.KIMI_SERVER_URL || detectKimiServerUrl();
     this.token =
@@ -236,7 +238,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     try {
       // Re-detect URL on each connect() call — stale lock may have been cleaned
       // and a new kimi web instance may have started on a different port since.
-      if (!this.connected) {
+      // Only auto-detect when KIMI_SERVER_URL was NOT explicitly set.
+      if (!this.connected && !this.explicitBaseUrl) {
         const freshUrl = detectKimiServerUrl();
         if (freshUrl !== this.baseUrl) {
           process.stderr.write(
@@ -419,11 +422,16 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
       this.applySessionStatus(sessionId, payload.status as string);
     }
 
-    // 0.24+ 事件模型：work_changed 携带 busy/pending_interaction（status_changed 不再发送）
+    // 0.24+ 事件模型：work_changed 携带 busy/main_turn_active/pending_interaction（status_changed 不再发送）
     if (type === "event.session.work_changed" && payload) {
       const mapped = normalizeSessionStatus(
         { busy: payload.busy as boolean | undefined },
-        { pending_interaction: payload.pending_interaction as string | undefined }
+        {
+          pending_interaction: payload.pending_interaction as string | undefined,
+          // v2.21: 0.31+ busy 含后台任务/持续活动，必须透传 main_turn_active 归一化——
+          // 否则 busy:true 被误判 running 写入缓存（后台任务 running 时事件 busy 恒 true）
+          main_turn_active: payload.main_turn_active as boolean | undefined,
+        }
       );
       if (mapped !== "unknown") {
         this.applySessionStatus(sessionId, mapped);
@@ -644,22 +652,16 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     }
 
     // Guard: wait for session ready via WebSocket (or polling fallback)
-    const preStatus = await this.waitForStatus(sessionId, "idle", 60000, autoApprove);
-    if (preStatus === "running") {
-      if (autoApprove) {
-        await sleep(2000);
-        const retryStatus = await this.waitForStatus(sessionId, "idle", 58000, autoApprove);
-        if (retryStatus === "running") {
-          throw new Error(
-            `Session ${sessionId} is busy. Wait for the current turn to complete.`
-          );
-        }
-      } else {
-        throw new Error(
-          `Session ${sessionId} is busy (status: ${preStatus}). ` +
-          `Wait for the current turn to complete before sending a new prompt.`
-        );
-      }
+    // v2.21: 等待上限 25s（< MCP 30s 协议超时）——busy 场景快速失败并给出明确错误，
+    // 不再静默等满 60s 后提交（届时客户端已超时断开，造成「报错但实际已注入」的误导）。
+    // 0.31+ 状态判定见 status-normalize.ts：后台任务 running 不阻塞主 turn 判定。
+    const preStatus = await this.waitForStatus(sessionId, "idle", 25000, autoApprove);
+    if (preStatus !== "idle" && preStatus !== "unknown" && preStatus !== "aborted") {
+      throw new Error(
+        `Session ${sessionId} is busy (status: ${preStatus}). ` +
+        `Wait for the current turn to complete, or use the returned poll_command ` +
+        `for background monitoring.`
+      );
     }
 
     // Subscribe to this session if not already
@@ -702,7 +704,8 @@ export class WireClient implements ISessionClient, IStatusClient, IPushClient {
     }
 
     // Step 0: Wait for session ready via WebSocket push (or polling fallback)
-    const preStatus = await this.waitForStatus(sessionId, "idle", Math.min(timeoutMs, 60000), autoApprove);
+    // v2.21: 上限 25s（< MCP 30s 协议超时），与 submitPrompt 前置等待一致
+    const preStatus = await this.waitForStatus(sessionId, "idle", Math.min(timeoutMs, 25000), autoApprove);
 
     if (preStatus === "awaiting_approval") {
         throw new Error(

@@ -1,5 +1,7 @@
 <!--
 修改记录（最近 — 完整历史见 CHANGELOG.md）:
+  2026-08-03 | kimi-code (fix) | v2.21 0.31.1 busy 语义漂移：busy 含后台任务/持续活动（主 turn 结束仍 true）→ 判定改 main_turn_active 优先（status-normalize.ts + poll-command.py + wire-client handleDirectEvent 三处）；submitPrompt 前置等待 60s→25s（< MCP 30s 超时）busy 快速失败明确报错，不再静默 60s 后提交；poll-result 失败标记防误读残留；WS work_changed 实测推送正常（载荷含 mta）；5 单测 + API.md 实测说明
+  2026-07-28 | kimi-code (fix) | v2.20 Server 0.29 锁文件兼容：server-lock.ts LockInfo 类型修正（started_at number|string）+ heartbeat_at 新鲜度检测（30s 无心跳→清理陈旧实例）+ 注释更新 0.28/0.29 行为差异；API.md 锁文件文档同步
   2026-07-20 | kimi-code (fix) | v2.19 watch 时间锚 + approval scope 透传：watch_session 过早解析根治（submit 时刻锚 + 消息 createdAt 判定，防陈旧 idle/快 turn 竞态）+ resolveWatch 取最新消息 + getCachedStatus 30s TTL；scope 实测语义=精确 action 匹配；38 单测 + 真实 e2e
   2026-07-20 | kimi-code (feat) | v2.18 适配收尾：watch 重置兜底 turn.started（0.27 无 prompt.submitted）+ sendPrompt turn 失败显式报错（lastError 生命周期）+ session-retire 接入 :export/:archive 服务端归档；grade_step/run_flow/watch e2e 复验通过；32 单测
   2026-07-20 | kimi-code (fix) | v2.17 Web 引擎 0.27 适配：WS Bearer 鉴权（missing_credential）+ work_changed 事件取代 status_changed + prompt body 恒带 model（agent_config.model 被忽略，有粘性）+ 状态归一化层 + POLL_SCRIPT 双模型；API.md 实测重写（11 项破坏性变更）；20 单测 + 生产链路回归通过
