@@ -10,11 +10,24 @@ import type { TunnelServices } from "./types.js";
 import { startMcpServer } from "./mcp-server.js";
 import { startHttpServer } from "./http-server.js";
 import { listSessions } from "./session-store.js";
+import { spawnKimiWebIfNeeded } from "./server-spawner.js";
 
 const PORT = parseInt(process.env.TUNNEL_PORT || "3456", 10);
 
+/** Auto-select the most recent session after a successful connect. */
+async function autoSelectSession(client: WireClient): Promise<void> {
+  if (client.getSessionId()) return;
+  const sessions = await listSessions();
+  if (sessions.length > 0) {
+    client.setSessionId(sessions[0].id);
+    process.stderr.write(
+      `[kimi-session-orchestrator] Auto-selected session: ${sessions[0].id} (${sessions[0].title.slice(0, 50)})\n`
+    );
+  }
+}
+
 async function main(): Promise<void> {
-  process.stderr.write("[kimi-session-orchestrator] v2.23.0 Starting...\n");
+  process.stderr.write("[kimi-session-orchestrator] v2.24.0 Starting...\n");
 
   const wireClient = new WireClient();
   const messageQueue = new MessageQueue();
@@ -65,18 +78,25 @@ async function main(): Promise<void> {
   // Wire connection runs as background task — doesn't block MCP stdio
   wireClient.connect()
     .then(async () => {
-      // Auto-detect the most recent session after successful connect
-      if (!wireClient.getSessionId()) {
-        const sessions = await listSessions();
-        if (sessions.length > 0) {
-          wireClient.setSessionId(sessions[0].id);
-          process.stderr.write(
-            `[kimi-session-orchestrator] Auto-selected session: ${sessions[0].id} (${sessions[0].title.slice(0, 50)})\n`
-          );
-        }
-      }
+      await autoSelectSession(wireClient);
     })
-    .catch((err) => {
+    .catch(async (err) => {
+      // v2.24 (FR-3): startup-only auto-activation — spawn a detached kimi web,
+      // then reconnect (connect() re-detects the URL). Never spawn recursively.
+      try {
+        const r = await spawnKimiWebIfNeeded();
+        process.stderr.write(
+          `[kimi-session-orchestrator] Kimi Server activated (spawned=${r.spawned}) at ${r.url}, reconnecting...\n`
+        );
+        await wireClient.connect();
+        await autoSelectSession(wireClient);
+        // connect() starts the health check on success
+        return;
+      } catch (e) {
+        process.stderr.write(
+          `[kimi-session-orchestrator] Auto-activation failed: ${(e as Error).message}\n`
+        );
+      }
       process.stderr.write(
         `[kimi-session-orchestrator] WARNING: Kimi server not available at ${process.env.KIMI_SERVER_URL || detectKimiServerUrl()}: ${(err as Error).message}\n`
       );

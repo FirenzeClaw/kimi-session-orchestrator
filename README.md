@@ -3,7 +3,7 @@
 # Kimi Session Orchestrator
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.21-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-v2.24-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)]()
 [![Python](https://img.shields.io/badge/python-%E2%89%A5%203.7-3776AB)]()
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-16%2B14-orange)]()
@@ -44,7 +44,7 @@ python3 --version || python --version
 
 npm install && npm run build
 
-# 1. 启动 Kimi Server
+# 1. 启动 Kimi Server（v2.24 起隧道启动时会自动激活，此步可跳过）
 kimi web --no-open
 
 # 2. 设置 token 并启动 Tunnel

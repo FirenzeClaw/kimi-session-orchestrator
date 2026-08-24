@@ -2,6 +2,18 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.24 — 2026-08-24
+
+**Tunnel & Poll 稳健性加固（specs/008）：lock 只读化 + 轮询 900s 续轮 + 启动自动激活 + poll 状态机诊断**
+
+- feat: `server-lock.ts` 只读化——删除 PID 活性/30s 心跳 stale 检测与文件自动清理（`unlinkSync`），实例文件仅作端口线索（legacy `server/lock` + `instances/*.json` 多路径 + fallback 5494）；poll 脚本 lock 读取 5×3s 重试 → 一次遍历，`LOCK_LOST` 提示语更新"tunnel 将自动激活"
+- feat: `server-spawner.ts` 新模块——启动时自动激活 `kimi web --no-open`（仅启动时，detached + unref 不受后台任务超时约束）：TCP 探测已有实例 → 原子 `mkdir ~/.kimi-tunnel/spawn.lock` 互斥（EEXIST 等待复用）→ spawn → 等实例文件 → finally 清理互斥；`index.ts` connect 失败接入（二次失败不递归 spawn，现行 healthcheck 兜底）；`KIMI_BIN` → `~/.kimi-code/bin/kimi` → PATH 解析
+- feat: poll 轮询加固——默认超时 300s→900s；新增 `max_rounds`（默认 2，`KIMI_POLL_MAX_ROUNDS` 覆盖）：一轮超时且 session 存活 → `[POLL_ROUND n/max]` 续轮
+- feat: poll 状态机诊断——回执空/极短（<`KIMI_POLL_MIN_TEXT`=20 且 turn 未 end_turn）→ 读 wire.jsonl 尾部 50 行判定：`MODEL_TIMEOUT`（停滞 >`KIMI_POLL_STALL_SEC`=120s 无产出）→ 自动 POST"继续"≤3 次（观察期=STALL_SEC）仍无产出 → `[POLL_BLOCKED]` + `~/.kimi-tunnel/poll-blocked-{sid}.md` 标记 + exit 5；`IMAGE_BLOCK`（停滞 + image 内容，模型无多模态）→ 直接标记"session 已阻塞需另起" exit 5；`ERROR` 仅告警、`NORMAL`（end_turn 短回复）不干预、`UNKNOWN` 仅输出
+- fix: spawner 集成验证捕获——`~/.kimi-tunnel` 不存在时 `mkdir spawn.lock` 抛 ENOENT 误判为他方激活（`spawned=false` 假短路）；先建父目录后激进式修正，复测 `spawned=true` 全链路
+- docs: 统一 8 个 skill 文件（kimi-session-orchestrator SKILL.md/guide-planning/guide-orchestration/guide-cross-project-memory + xmind + xmind-orchestrated + session-retire + loop-orchestrator guide-loop-core）的 Server 恢复流程 R1-R3 为 v2.24 语义（instances/ 检测 + 自动激活说明）；guide-execute 新增「轮询行为（v2.24）」章节（退出码 0/2/3/4/5 + 标记文件）；session-retire PORT 读取 legacy lock 路径 → instances/*.json 遍历；API.md 0.29.0 变更注记补 v2.24 只读化
+- test: 新增 3 文件 19 用例（server-lock 只读 5 / server-spawner 探测·互斥·解析 8 / poll 参数·诊断 fixture 7——`KIMI_CODE_HOME`/`KIMI_TUNNEL_HOME` 注入隔离），68/68 全绿；真实冷启动集成验证（停 server → tunnel 自动拉起 → 连接成功）
+
 ## v2.23 — 2026-08-03
 
 **可选工具部署：审批流/工作流引擎/watch族/推送 14 工具可选化（使用率统计驱动）**

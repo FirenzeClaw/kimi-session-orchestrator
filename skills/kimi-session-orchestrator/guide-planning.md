@@ -257,16 +257,17 @@ PM 拆解 → create_session → execute_prompt("执行 X，完成后用 selftes
 当 MCP 工具返回 "Wire client 未连接到 Kimi Server" 或 `get_tunnel_status` 显示 `wireConnected: false` 时，**无需等待用户指示**，自主执行以下恢复流程：
 
 **R1 — 诊断**
-`Bash: cat ~/.kimi-code/server/lock`
-→ lock 存在且 PID 存活？跳 R3
-→ lock 缺失或 PID 已死？进 R2
+`Bash: ls ~/.kimi-code/server/instances/ && get_tunnel_status`
+→ 实例文件存在且 `wireConnected: false`？跳 R3（等自动重连）
+→ 实例文件缺失？进 R2
 
-**R2 — 启动 Kimi Server**
-`Bash(run_in_background=true): kimi web --no-open &`
-等待 8-10s，确认 lock 文件出现且 port 字段有效。
+**R2 — 启动 Kimi Server（兜底）**
+`Bash(run_in_background=true): kimi web --no-open`
+等待 8-10s，确认 `~/.kimi-code/server/instances/` 出现实例文件且 port 字段有效。
+（v2.24：lock 只读化——tunnel 只读取不清理；启动断连时 tunnel 自动激活 server，本流程为运行中断联的兜底）
 
 **R3 — 等待 Tunnel 自动重连**
-Tunnel 每 10s 自动检测 lock 并重试连接。等待 ≤30s。
+Tunnel 每 10s 自动检测实例文件并重试连接。等待 ≤30s。
 `get_tunnel_status` 确认 `wireConnected: true`。
 超过 120s 仍未恢复 → 在终端执行 `/reload` 强制重启 MCP 进程。
 

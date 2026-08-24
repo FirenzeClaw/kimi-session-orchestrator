@@ -20,6 +20,14 @@
 
 > ⛔ **poll_command 必须原样使用，禁止手写改写。** v2.16 起 poll_command 为纯 Python 脚本（短命令 `python3 ~/.kimi-tunnel/poll.py <args>` 或降级内联版），`fetch_result` 自动写入 `~/.kimi-tunnel/poll-result-{sid}.txt`。直接传给 Bash，一字不改。
 
+## 轮询行为（v2.24）
+
+- 每轮默认等待 **900s（15 分钟）**；一轮超时若 session 仍存活，自动进入下一轮（默认最多 2 轮，`KIMI_POLL_MAX_ROUNDS` 可调），输出 `[POLL_ROUND n/max]`
+- 回执为空/极短（< `KIMI_POLL_MIN_TEXT`=20 字符且回合未完成）时，脚本自动检测 wire 日志状态：
+  - `MODEL_TIMEOUT` → 自动发送"继续"（≤3 次，每次观察 ≥ `KIMI_POLL_STALL_SEC`=120s）；3 次仍无产出 → 输出 `[POLL_BLOCKED]` + 写 `~/.kimi-tunnel/poll-blocked-{sid}.md`，**exit 5**，需 PM 介入
+  - `IMAGE_BLOCK`（停滞 + 图片内容，模型无多模态）→ 不发送"继续"，直接 `[POLL_BLOCKED]` + 标记文件"session 已阻塞需另起"，**exit 5**
+- 退出码：`0`=完成（含 `[CTX_HIGH]` 警告）`2`=server 离线 `3`=轮询超时 `4`=未检测到 Kimi Server（tunnel 会自动激活，可稍后重试）`5`=检测到阻塞
+
 ## 核心铁律
 
 | 规则 | 违反后果 |
@@ -57,19 +65,20 @@
 
 ## Server 断联/未启动自主恢复
 
-当 MCP 工具返回 "Wire client 未连接到 Kimi Server" 或 `get_tunnel_status` 显示 `wireConnected: false` 时，**无需等待用户指示**，自主执行以下恢复流程：
+**v2.24 起：tunnel 启动时若 Kimi Server 不在线，会自动激活 `kimi web`（detached、无超时、原子互斥防多实例）**——冷启动场景无需手动执行 R2。以下流程用于**运行中**断联或自动激活失败的兜底：
 
 **R1 — 诊断**
-`Bash: cat ~/.kimi-code/server/lock`
-→ lock 存在且 PID 存活？跳 R3
-→ lock 缺失或 PID 已死？进 R2
+`Bash: ls ~/.kimi-code/server/instances/ && get_tunnel_status`
+→ 实例文件存在且 `wireConnected: false`？跳 R3（等自动重连）
+→ 实例文件缺失？进 R2
 
-**R2 — 启动 Kimi Server**
-`Bash(run_in_background=true): kimi web --no-open &`
-等待 8-10s，确认 lock 文件出现且 port 字段有效。
+**R2 — 启动 Kimi Server（兜底）**
+`Bash(run_in_background=true): kimi web --no-open`
+等待 8-10s，确认 `~/.kimi-code/server/instances/` 出现实例文件且 port 字段有效。
+（lock 文件已只读化——tunnel 只读取，不做清理；陈旧文件由自动激活流程覆盖）
 
 **R3 — 等待 Tunnel 自动重连**
-Tunnel 每 10s 自动检测 lock 并重试连接。等待 ≤30s。
+Tunnel 每 10s 自动检测实例文件并重试连接。等待 ≤30s。
 `get_tunnel_status` 确认 `wireConnected: true`。
 超过 120s 仍未恢复 → 在终端执行 `/reload` 强制重启 MCP 进程。
 

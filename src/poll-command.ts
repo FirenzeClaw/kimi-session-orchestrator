@@ -10,14 +10,18 @@
  *
  * Defenses:
  *   - Max N consecutive request failures → exit(2) "server unreachable"
- *   - Max total elapsed → exit(3) "timeout"
- *   - Lock file missing after retries → exit(4) "lock lost"
+ *   - Max total elapsed per round → round timeout; if the session is still alive,
+ *     start a new round (up to max_rounds) instead of giving up (v2.24)
+ *   - Max rounds exhausted → exit(3) "timeout"
+ *   - Lock file missing after read → exit(4) "lock lost"
+ *   - Blocked session diagnosed (model timeout / image block) → exit(5) + marker file (v2.24)
  *   - Context token threshold exceeded → warning printed but exit(0)
  *
  * Uses `python3` with `python` fallback in the shell wrapper for cross-platform
  * compatibility.
  *
  * Modification history:
+ *   2026-08-24 | kimi-code (feat) | v2.24 轮询加固：默认超时 300→900s + max_rounds 续轮（存活才续）+ 状态机诊断（空/短回执→查 log→自动"继续"×3→阻塞标记 exit 5）+ lock 一次遍历
  *   2026-08-03 | kimi-code (fix) | poll-result 失败标记：fetch 异常/无文本时写 [POLL_FETCH_FAILED] 覆盖旧文件，防 PM 误读残留（v2.21）
  *   2026-08-03 | kimi-code (fix) | 0.31+ busy 漂移：busy=true 补查详情 main_turn_active 判定主 turn（后台任务不再阻塞轮询；v2.21）
  *   2026-07-24 | kimi-code (fix) | 0.28+ 兼容：lock 路径 server/lock → server/instances/*.json 双格式，5 次重试遍历全部路径
@@ -36,8 +40,9 @@ export interface PollConfig {
   sessionId: string;
   baseUrl?: string;
   token?: string;
-  maxWaitSeconds?: number;   // total timeout, default 300
+  maxWaitSeconds?: number;   // per-round timeout, default 900 (v2.24: 300→900)
   maxFailures?: number;       // consecutive curl failures to abort, default 3
+  maxRounds?: number;         // poll rounds on timeout while session alive, default 2 (v2.24)
 }
 
 export const POLL_SCRIPT = [
@@ -47,10 +52,11 @@ export const POLL_SCRIPT = [
   "sid = sys.argv[1]",
   "base_url = sys.argv[2] if sys.argv[2] != 'default' else ''",
   "token = sys.argv[3] if sys.argv[3] != 'default' else ''",
-  "max_sec = int(sys.argv[4]) if len(sys.argv) > 4 else 300",
+  "max_sec = int(sys.argv[4]) if len(sys.argv) > 4 else 900",
   "max_fails = int(sys.argv[5]) if len(sys.argv) > 5 else 3",
+  "max_rounds = int(sys.argv[6]) if len(sys.argv) > 6 else 2",
   "",
-  "# ---- read lock (retry 5x sleep 3s) — 0.28+ instances compat ----",
+  "# ---- read lock once (v2.24: read-only port hint, no retries) ----",
   "server_dir = os.path.expanduser('~/.kimi-code/server')",
   "",
   "# helper: try to read port from a lock file, return port or None",
@@ -70,19 +76,14 @@ export const POLL_SCRIPT = [
   "                paths.append(os.path.join(inst, f))",
   "    return paths",
   "",
-  "lock_paths = get_lock_paths()",
   "port = None",
-  "for i in range(5):",
-  "    for p in lock_paths:",
-  "        port = try_lock(p)",
-  "        if port:",
-  "            break",
+  "for p in get_lock_paths():",
+  "    port = try_lock(p)",
   "    if port:",
   "        break",
-  "    time.sleep(3)",
   "",
   "if not port:",
-  "    print(f'[LOCK_LOST] checked {len(lock_paths)} lock path(s) retries=5')",
+  "    print(f'[LOCK_LOST] 未检测到 Kimi Server（已检查 {len(get_lock_paths())} 个实例文件）——tunnel 将自动激活，可稍后重试')",
   "    sys.exit(4)",
   "",
   "if not base_url:",
@@ -127,21 +128,111 @@ export const POLL_SCRIPT = [
   "                            f.write(text)",
   "                    except Exception:",
   "                        pass",
-  "                    return",
+  "                    return len(text)  # v2.24: return length for short-reply diagnosis",
   "        mark_failed('no text block in latest assistant message')",
   "    except Exception as e:",
   "        print(f'[fetch_result] {e}')",
   "        mark_failed(str(e))",
+  "    return 0",
+  "",
+  "# ---- v2.24: blocked-session diagnosis (state machine over wire.jsonl tail) ----",
+  "def env_int(name, default):",
+  "    try:",
+  "        return int(os.environ.get(name, default))",
+  "    except Exception:",
+  "        return default",
+  "",
+  "MIN_TEXT = env_int('KIMI_POLL_MIN_TEXT', 20)",
+  "STALL_SEC = env_int('KIMI_POLL_STALL_SEC', 120)",
+  "marker_path = os.path.expanduser(f'~/.kimi-tunnel/poll-blocked-{sid}.md')",
+  "retry_continue = 0",
+  "",
+  "def find_wire_log():",
+  "    import glob as _glob",
+  "    base = os.path.expanduser('~/.kimi-code/sessions')",
+  "    cand = _glob.glob(os.path.join(base, 'wd_*', sid, 'agents', 'main', 'wire.jsonl'))",
+  "    return cand[0] if cand else None",
+  "",
+  "def diagnose_blocked():",
+  "    \"\"\"Inspect wire.jsonl tail; return (kind, reason).\"\"\"",
+  "    wire = find_wire_log()",
+  "    if not wire:",
+  "        return ('UNKNOWN', 'wire.jsonl not found')",
+  "    try:",
+  "        raw = open(wire, encoding='utf-8', errors='replace').read()",
+  "    except Exception as e:",
+  "        return ('UNKNOWN', f'cannot read wire log: {e}')",
+  "    tail = [l for l in raw.splitlines() if l.strip()][-50:]",
+  "    if not tail:",
+  "        return ('UNKNOWN', 'wire log tail empty')",
+  "    last_ts = 0",
+  "    has_end_turn = False",
+  "    has_error = False",
+  "    has_image = False",
+  "    for l in tail:",
+  "        try:",
+  "            e = json.loads(l)",
+  "        except Exception:",
+  "            continue",
+  "        ts = e.get('time') or 0",
+  "        if ts:",
+  "            last_ts = max(last_ts, ts)",
+  "        s = json.dumps(e, ensure_ascii=False).lower()",
+  "        if 'image' in s or '图片' in s:",
+  "            has_image = True",
+  "        if diag_error_kw(s):",
+  "            has_error = True",
+  "        if e.get('type') == 'context.append_loop_event':",
+  "            ev = e.get('event', {})",
+  "            if ev.get('type') == 'step.end' and ev.get('finishReason') == 'end_turn':",
+  "                has_end_turn = True",
+  "    if has_end_turn:",
+  "        return ('NORMAL', 'turn completed (end_turn) — short/empty reply is a tool-only turn')",
+  "    if has_error:",
+  "        return ('ERROR', 'error entries found in recent log')",
+  "    stalled = time.time() - last_ts",
+  "    if stalled > STALL_SEC:",
+  "        if has_image:",
+  "            return ('IMAGE_BLOCK', f'stalled {int(stalled)}s with image content — model likely lacks multimodal support')",
+  "        return ('MODEL_TIMEOUT', f'stalled {int(stalled)}s without output')",
+  "    return ('UNKNOWN', f'no end_turn/error, stalled {int(stalled)}s (< threshold {STALL_SEC}s)')",
+  "",
+  "def diag_error_kw(s):",
+  "    return ('error' in s) or ('failed' in s) or ('timeout' in s)",
+  "",
+  "def write_block_marker(kind, reason, detail=''):",
+  "    try:",
+  "        with open(marker_path, 'w', encoding='utf-8') as f:",
+  "            f.write('# Poll Blocked Marker\\n')",
+  "            f.write(f'- time: {time.strftime(\"%Y-%m-%dT%H:%M:%S\")}\\n')",
+  "            f.write(f'- session: {sid}\\n')",
+  "            f.write(f'- kind: {kind}\\n')",
+  "            f.write(f'- reason: {reason}\\n')",
+  "            if detail:",
+  "                f.write(f'- detail: {detail}\\n')",
+  "            if kind == 'MODEL_TIMEOUT':",
+  "                f.write('- action: 模型超时阻塞——已自动发送\"继续\"3 次仍无产出，建议 PM 介入（重试 poll 或评估退役）\\n')",
+  "            elif kind == 'IMAGE_BLOCK':",
+  "                f.write('- action: session 已阻塞需另起——模型无多模态能力读图卡死，建议另起 session，勿再投图\\n')",
+  "    except Exception:",
+  "        pass",
   "",
   "# ---- main polling loop ----",
   "start_ts = time.time()",
   "fails = 0",
+  "round_no = 0",
+  "status_ok = False  # v2.24: whether the last status request succeeded (round-continuation check)",
   "while True:",
   "    elapsed = int(time.time() - start_ts)",
   "",
-  "    # Guard: total timeout",
+  "    # Guard: per-round timeout → continue to next round if session alive (v2.24)",
   "    if elapsed >= max_sec:",
-  "        print(f'[POLL_TIMEOUT] 等待 {max_sec}s 超时，session 可能卡住或 server 离线')",
+  "        if round_no < max_rounds and status_ok and status not in ('idle', 'aborted'):",
+  "            round_no += 1",
+  "            start_ts = time.time()",
+  "            print(f'[POLL_ROUND {round_no}/{max_rounds}] 等待 {max_sec}s 超时但 session 存活，进入下一轮')",
+  "            continue",
+  "        print(f'[POLL_TIMEOUT] 等待 {max_sec}s 超时（{round_no}/{max_rounds} 轮），session 可能卡住或 server 离线')",
   "        fetch_result()",
   "        sys.exit(3)",
   "",
@@ -189,6 +280,7 @@ export const POLL_SCRIPT = [
   "                pass",
   "        ctx_tokens = sdata.get('context_tokens', '')",
   "        ctx_max = sdata.get('max_context_tokens', '')",
+  "        status_ok = True  # v2.24: request succeeded — session reachable",
   "    except Exception:",
   "        pass",
   "",
@@ -214,18 +306,47 @@ export const POLL_SCRIPT = [
   "            except:",
   "                pass",
   "        print('---RESULT---')",
-  "        fetch_result()",
+  "        rlen = fetch_result()",
+  "        # v2.24: 空/极短回执（低于 MIN_TEXT）→ 状态机诊断，仅短回复（end_turn 完成）不触发",
+  "        if rlen < MIN_TEXT:",
+  "            print(f'[POLL_DIAG] 回执长度 {rlen} 低于阈值 {MIN_TEXT}，检测 session 日志状态...')",
+  "            kind, reason = diagnose_blocked()",
+  "            print(f'[POLL_DIAG] 判定: {kind} — {reason}')",
+  "            if kind == 'MODEL_TIMEOUT':",
+  "                if retry_continue >= 3:",
+  "                    write_block_marker('MODEL_TIMEOUT', reason, f'continue-sent={retry_continue}')",
+  "                    print(f'[POLL_BLOCKED] 模型超时阻塞：已自动发送\"继续\" {retry_continue} 次仍无产出，请 PM 介入（标记: {marker_path}）')",
+  "                    sys.exit(5)",
+  "                retry_continue += 1",
+  "                try:",
+  "                    req = make_req(f'/api/v1/sessions/{sid}/prompts')",
+  "                    req.add_header('Content-Type', 'application/json')",
+  "                    body = json.dumps({'content': [{'type': 'text', 'text': '继续'}]}).encode('utf-8')",
+  "                    urllib.request.urlopen(req, data=body, timeout=10)",
+  "                    print(f'[POLL_DIAG] 模型超时：已自动发送\"继续\"（{retry_continue}/3），观察 {STALL_SEC}s 后复查...')",
+  "                except Exception as e:",
+  "                    print(f'[POLL_DIAG] 发送\"继续\"失败: {e}')",
+  "                time.sleep(STALL_SEC)",
+  "                continue",
+  "            elif kind == 'IMAGE_BLOCK':",
+  "                write_block_marker('IMAGE_BLOCK', reason)",
+  "                print(f'[POLL_BLOCKED] session 已阻塞需另起：模型无多模态能力读图卡死（标记: {marker_path}）')",
+  "                sys.exit(5)",
+  "            elif kind == 'ERROR':",
+  "                print('[POLL_DIAG] 检测到错误条目，请 PM 用 read_session_log 查看详情')",
+  "            # NORMAL / UNKNOWN：不干预，正常输出回执",
   "        sys.exit(0)",
   "",
   "    time.sleep(2)",
 ].join("\n");
 
 export function generatePollCommand(config: PollConfig): string {
-  const { sessionId, token = "", maxWaitSeconds = 300, maxFailures = 3 } = config;
+  const { sessionId, token = "", maxWaitSeconds = 900, maxFailures = 3 } = config;
+  const maxRounds = config.maxRounds ?? parseInt(process.env.KIMI_POLL_MAX_ROUNDS || "2", 10);
   const baseUrl = config.baseUrl || process.env.KIMI_SERVER_URL || detectKimiServerUrl();
   const effectiveToken = token || process.env.KIMI_SERVER_TOKEN || "";
   const safe = (v: string) => v.includes(" ") ? `"${v}"` : v;
-  const args = `${safe(sessionId)} ${safe(baseUrl || "default")} ${safe(effectiveToken || "default")} ${maxWaitSeconds} ${maxFailures}`;
+  const args = `${safe(sessionId)} ${safe(baseUrl || "default")} ${safe(effectiveToken || "default")} ${maxWaitSeconds} ${maxFailures} ${maxRounds}`;
 
   const pollPyPath = `${homedir()}/.kimi-tunnel/poll.py`.replace(/\\/g, "/");
 

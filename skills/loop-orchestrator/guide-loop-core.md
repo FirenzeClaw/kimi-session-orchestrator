@@ -204,16 +204,16 @@ Loop 执行中若 tool 调用报错或 `get_tunnel_status` 显示 `wireConnected
 
 ```
 STEP R1 — 确认 Kimi Server 状态
-  Bash: cat ~/.kimi-code/server/lock
-    lock 存在且 PID 存活 → 跳过 R2，直接 R3（等待自动重连）
-    lock 不存在 → 进入 R2
+  Bash: ls ~/.kimi-code/server/instances/ && get_tunnel_status
+    实例文件存在且 wireConnected: false → 跳过 R2，直接 R3（等待自动重连）
+    实例文件缺失 → 进入 R2
 
-STEP R2 — 启动 Kimi Server
-  Bash(run_in_background=true): kimi web --no-open &
-  等待 8-10s，确认 lock 文件出现且 port 字段有效
+STEP R2 — 启动 Kimi Server（兜底；v2.24 起 tunnel 启动时会自动激活 server）
+  Bash(run_in_background=true): kimi web --no-open
+  等待 8-10s，确认 instances/ 出现实例文件且 port 字段有效
 
 STEP R3 — 等待 Tunnel 自动重连
-  Tunnel 每 10s 检测 lock 并重试连接 → 等待 30-60s
+  Tunnel 每 10s 检测实例文件并重试连接 → 等待 30-60s
   get_tunnel_status → wireConnected: true ? → 进入 R4
   超过 120s 仍未恢复 → /reload（重启 MCP 进程强制重连）
 
