@@ -1,5 +1,6 @@
 <!--
 修改记录（最近 — 完整历史见 CHANGELOG.md）:
+  2026-08-27 | kimi-code (fix) | v2.25 poll 容错重构：诊断降级为标注（结构化 finishReason 替代 error 子串匹配），除 end_turn 外一切异常形态（上游报错/中断/停滞/读图）统一自动注入"继续"×3——纯计数续发（15s 启动宽限防 POST→busy 竞速连发，无观察期，session 完工即正常出口），计满才落标记 exit 5 回调 PM；POLL_SCRIPT 全请求禁用系统代理（本机轮询免受 Windows 代理开关影响）；新增接线级 e2e 测试（71/71）；guide-execute 轮询行为节重写；package.json/README 版本同步 v2.25.0
   2026-08-24 | kimi-code (feat) | v2.24 Tunnel & Poll 稳健性加固（specs/008）：server-lock 只读化（删 PID/心跳/清理）+ poll 默认 900s/max_rounds 续轮 + server-spawner 启动自动激活 kimi web（原子 mkdir 互斥 + detached）+ poll 状态机诊断（空/短回执→查 log→自动"继续"×3→[POLL_BLOCKED] 标记文件 exit 5）；8 个 skill 文件恢复流程统一 v2.24 语义；新增 server-lock/server-spawner/poll-command 测试 19 例（68/68 全绿）；API.md/README/CHANGELOG 同步
   2026-08-03 | kimi-code (feat) | v2.23 可选工具部署：审批流/工作流引擎/watch族/推送 14 工具拆可选组（使用率统计 0 次驱动），KIMI_TUNNEL_OPTIONAL_TOOLS=core 仅注册 16 核心；README 新增可选部署章节 + 配置示例；协议级验证 30/16 双模式
   2026-08-03 | kimi-code (feat) | v2.22 list_models 工具 + create_session model 校验：0.31.1 模型名改版（deepseek-v4-* 失效，标准名取 GET /api/v1/models）→ 新增 list_models（30s TTL）+ model 参数运行时校验返 model_warning；工具数 29→30；46 单测
@@ -75,7 +76,7 @@ src/
 ├── memory-store.ts          # SQLite 共享内存 CRUD + buildInjection() + 记忆profiles（v2.10：set/getMemoryProfile 移入）
 ├── server-lock.ts           # Kimi Server 端口只读发现（v2.24 去 stale 清理：仅多路径读取 + fallback 5494）
 ├── server-spawner.ts        # v2.24 启动时自动激活 kimi web：探测→原子 mkdir 互斥→detached spawn→等实例文件
-├── poll-command.ts           # 纯 Python 内联轮询脚本生成（python -c，v2.15 重写，v2.17 双模型状态判定，v2.24 900s 续轮 + 状态机诊断 exit 5）
+├── poll-command.ts           # 纯 Python 内联轮询脚本生成（python -c，v2.15 重写，v2.17 双模型状态判定，v2.24 900s 续轮，v2.25 无差别容错 + 本机代理免疫）
 ├── status-normalize.ts        # Session 状态归一化：0.22.x status 枚举 / 0.24+ busy+pending_interaction 双模型统一映射（v2.17）
 ├── tools/
 │   ├── helpers.ts            # 共享工具辅助函数（v2.10：preparePrompt + ensureConnected, v2.11：injectMemoryIntoPrompt + setMemoryProfileWithExpiry）
@@ -191,7 +192,7 @@ npm run inspector    # MCP Inspector 调试模式
 
 **原理**：Kimi Code 后台任务基于操作系统进程退出信号，零 CPU 轮询开销。Python 进程 urllib 轮询等到 idle 后退出 → runtime 注入 `<notification>` 到统筹 session。脚本内不依赖 node（锁读取用 Python json.load），单进程执行无子 shell 变量作用域问题。
 
-> ⛔ **poll_command 使用规范（v2.24 更新）**：`execute_prompt` 返回的 `poll_command` 是完整的 `python3 -c "..."` 内联脚本，**直接以 `Bash(run_in_background=true)` 执行即可，不要改写**。脚本纯 Python 实现：`sys.argv` 接收参数 → 读实例文件端口（一次遍历，v2.24 只读）→ `urllib.request` 轮询 status → idle 时 fetch 回复。退出码 0/2/3/4/5：0=完成、2=server离线、3=超时（默认 900s×2 轮）、4=未检测到 Server（tunnel 会自动激活，可稍后重试）、5=检测到阻塞（自动"继续"×3 无效的模型超时 / 读图阻塞，见 `~/.kimi-tunnel/poll-blocked-{sid}.md`）。原始陷阱（v2.8.4 修复）：bash 双引号 `\n` 不展开 + `2>/dev/null` 静默吞 `JSONDecodeError`；curl 管道大响应截断；node -e 读锁不可靠（v2.15 修复）。
+> ⛔ **poll_command 使用规范（v2.25 更新）**：`execute_prompt` 返回的 `poll_command` 是完整的 `python3 -c "..."` 内联脚本，**直接以 `Bash(run_in_background=true)` 执行即可，不要改写**。脚本纯 Python 实现：`sys.argv` 接收参数 → 读实例文件端口（一次遍历，只读）→ `urllib.request` 轮询 status（v2.25 起全请求禁用系统代理）→ idle 时 fetch 回复；回执空/极短时除 end_turn 工具型回合外**一律自动注入"继续"×3 续监（无差别容错）**。退出码 0/2/3/4/5：0=完成、2=server离线、3=超时（默认 900s×2 轮）、4=未检测到 Server（tunnel 会自动激活，可稍后重试）、5=异常注入"继续"×3 后仍未恢复（见 `~/.kimi-tunnel/poll-blocked-{sid}.md`）。原始陷阱（v2.8.4 修复）：bash 双引号 `\n` 不展开 + `2>/dev/null` 静默吞 `JSONDecodeError`；curl 管道大响应截断；node -e 读锁不可靠（v2.15 修复）。
 
 ### 备选：MCP 内部工具（轻量场景）
 
@@ -281,7 +282,7 @@ manual session 的工具调用由 PM 手动决策，流程：
 | `specs/005-web-ui-extension/` | 浏览器扩展+JS脚本双版本——废弃独立HTML监控，注入Kimi Web UI侧边栏 |
 | `specs/006-cross-model-grader/` | Cross-model grader——grade_step maker/checker 模型分离 |
 | `specs/007-cron-scheduler-skill/` | Cron scheduler skill——cron.yaml 双写 + run_lock + one-shot 续期链 |
-| `specs/008-tunnel-resilience/` | [DONE v2.24] Tunnel & Poll 稳健性加固——lock 只读化 / poll 900s+续轮 / 启动自动激活 kimi web / poll 状态机诊断（自动"继续"+阻塞标记 exit 5） |
+| `specs/008-tunnel-resilience/` | [DONE v2.24] Tunnel & Poll 稳健性加固——lock 只读化 / poll 900s+续轮 / 启动自动激活 kimi web / poll 状态机诊断（v2.25 演进为无差别容错：任意报错统一"继续"×3 + 本机代理免疫） |
 
 ## Agent Skills
 

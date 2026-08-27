@@ -27,7 +27,7 @@ async function autoSelectSession(client: WireClient): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  process.stderr.write("[kimi-session-orchestrator] v2.24.0 Starting...\n");
+  process.stderr.write("[kimi-session-orchestrator] v2.25.0 Starting...\n");
 
   const wireClient = new WireClient();
   const messageQueue = new MessageQueue();

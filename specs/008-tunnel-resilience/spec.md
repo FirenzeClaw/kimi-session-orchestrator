@@ -3,6 +3,7 @@
 - **特性目录**: `specs/008-tunnel-resilience`
 - **日期**: 2026-08-24
 - **状态**: Implemented (2026-08-24, v2.24) — 实施与验证记录：lock 只读化 / poll 900s+续轮 / 自动激活（集成验证捕获并修复 spawner ENOENT bug）/ 状态机诊断；68/68 单测通过（新增 19）
+- **修订**: 2026-08-27 v2.25 — 本 spec 的 S4/S5"轮询诊断"演进为**无差别容错**：除 end_turn 外一切异常形态统一自动注入"继续"×3（纯计数 + `KIMI_POLL_RESUME_GRACE`=15s 启动宽限，无观察期——v2.24 的 ERROR/IMAGE_BLOCK 分流与 STALL_SEC 观察期均废弃）；判定改结构化 finishReason；POLL_SCRIPT 全请求禁用系统代理。动机与实测根因见 CHANGELOG v2.25；71/71 测试（含接线级 e2e）
 
 ## 定位
 

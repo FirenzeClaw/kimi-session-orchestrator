@@ -20,13 +20,13 @@
 
 > ⛔ **poll_command 必须原样使用，禁止手写改写。** v2.16 起 poll_command 为纯 Python 脚本（短命令 `python3 ~/.kimi-tunnel/poll.py <args>` 或降级内联版），`fetch_result` 自动写入 `~/.kimi-tunnel/poll-result-{sid}.txt`。直接传给 Bash，一字不改。
 
-## 轮询行为（v2.24）
+## 轮询行为（v2.25）
 
 - 每轮默认等待 **900s（15 分钟）**；一轮超时若 session 仍存活，自动进入下一轮（默认最多 2 轮，`KIMI_POLL_MAX_ROUNDS` 可调），输出 `[POLL_ROUND n/max]`
-- 回执为空/极短（< `KIMI_POLL_MIN_TEXT`=20 字符且回合未完成）时，脚本自动检测 wire 日志状态：
-  - `MODEL_TIMEOUT` → 自动发送"继续"（≤3 次，每次观察 ≥ `KIMI_POLL_STALL_SEC`=120s）；3 次仍无产出 → 输出 `[POLL_BLOCKED]` + 写 `~/.kimi-tunnel/poll-blocked-{sid}.md`，**exit 5**，需 PM 介入
-  - `IMAGE_BLOCK`（停滞 + 图片内容，模型无多模态）→ 不发送"继续"，直接 `[POLL_BLOCKED]` + 标记文件"session 已阻塞需另起"，**exit 5**
-- 退出码：`0`=完成（含 `[CTX_HIGH]` 警告）`2`=server 离线 `3`=轮询超时 `4`=未检测到 Kimi Server（tunnel 会自动激活，可稍后重试）`5`=检测到阻塞
+- **回执为空/极短（< `KIMI_POLL_MIN_TEXT`=20）→ 无差别容错（v2.25 重构）**：读 wire 日志尾部分类标注后，**除 NORMAL（end_turn 正常完成的工具型回合，不干预）外，一切异常形态统一自动注入"继续"并回归常规监测**——纯计数 ≤3 次，两次注入间仅 `KIMI_POLL_RESUME_GRACE`=15s 启动宽限（防 POST→busy 竞速连发，非观察期）；计满 3 次仍无有效产出 → `[POLL_BLOCKED]` + 写 `~/.kimi-tunnel/poll-blocked-{sid}.md` + **exit 5**，需 PM 介入。session 若在监测期完工即走正常 exit(0)，不会误伤
+- 标注 kind（仅记录用，不改变恢复动作）：`UPSTREAM_ERROR`（step.end finishReason=error——上游 provider 临时抖动的主形态）/ `INTERRUPTED` / `IMAGE_BLOCK` / `MODEL_TIMEOUT` / `NO_OUTPUT`；判定基于结构化 finishReason 字段，不做文本子串匹配
+- v2.25 附带加固：脚本对全部请求安装空 ProxyHandler 禁用系统代理——本机 Kimi Server 轮询不再随 Windows 系统代理开关漂移
+- 退出码：`0`=完成（含 `[CTX_HIGH]` 警告）`2`=server 离线 `3`=轮询超时 `4`=未检测到 Kimi Server（tunnel 会自动激活，可稍后重试）`5`=异常经"继续"×3 后仍未恢复
 
 ## 核心铁律
 

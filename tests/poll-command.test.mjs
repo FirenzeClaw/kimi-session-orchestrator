@@ -36,9 +36,11 @@ test("generatePollCommand: 显式 maxRounds 优先于 env", () => {
   }
 });
 
-// ── 诊断侧：从 POLL_SCRIPT 提取诊断函数区段，Python 子进程跑真实判定 ──────────
+// ── 诊断侧（v2.25）：从 POLL_SCRIPT 提取诊断区段，Python 子进程跑真实判定 ────
+// v2.25 契约：kind 仅作标注，NORMAL(end_turn) 是唯一豁免分支——其余一切异常形态
+// 都会进入统一自动注入"继续"恢复路径。判定基于结构化 finishReason，不做子串匹配。
 
-const DIAG_START = "# ---- v2.24: blocked-session diagnosis";
+const DIAG_START = "# ---- blocked-session diagnosis";
 const DIAG_END = "# ---- main polling loop ----";
 
 function diagSnippet() {
@@ -79,50 +81,74 @@ function runDiag(fixtureLines, env = {}) {
 
 const now = () => Math.floor(Date.now() / 1000);
 
-test("diagnose: end_turn 完成 + 空回复 → NORMAL（纯工具回合，不干预）", () => {
+const ev = (obj) => JSON.stringify(obj);
+
+test("diagnose: end_turn 完成 + 空回复 → NORMAL（唯一豁免：工具型回合不干预）", () => {
   const out = runDiag([
-    JSON.stringify({ type: "turn.prompt", time: now() - 50, input: [{ type: "text", text: "hi" }] }),
-    JSON.stringify({ type: "context.append_loop_event", time: now() - 10, event: { type: "step.end", finishReason: "end_turn" } }),
+    ev({ type: "turn.prompt", time: now() - 50, input: [{ type: "text", text: "hi" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 10, event: { type: "step.end", finishReason: "end_turn" } }),
   ]);
   assert.match(out, /DIAG:NORMAL\|/);
 });
 
-test("diagnose: 尾部错误条目 → ERROR", () => {
+test("diagnose: step.end finishReason=error → UPSTREAM_ERROR（今日实测的上游失败形态）", () => {
   const out = runDiag([
-    JSON.stringify({ type: "turn.prompt", time: now() - 50, input: [{ type: "text", text: "go" }] }),
-    JSON.stringify({ type: "some.error", time: now() - 5 }),
+    ev({ type: "turn.prompt", time: now() - 60, input: [{ type: "text", text: "go" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 40, event: { type: "step.end", finishReason: "error" } }),
+    ev({ type: "context.append_loop_event", time: now() - 20, event: { type: "step.begin" } }),
+    ev({ type: "llm.request", time: now() - 19 }),
+    ev({ type: "context.append_loop_event", time: now() - 15, event: { type: "step.end", finishReason: "error" } }),
   ]);
-  assert.match(out, /DIAG:ERROR\|/);
+  assert.match(out, /DIAG:UPSTREAM_ERROR\|/);
 });
 
-test("diagnose: 停滞 + image 内容 → IMAGE_BLOCK（图片关键词命中）", () => {
+test("diagnose: 结构化判定不受文本影响——错误文案出现在事件内容里但无 error step.end → 不误判 NORMAL 之外的过期语义", () => {
+  // v2.24 的子串匹配会把这类 fixture 判成 ERROR；v2.25 只看 step.end 结构字段，
+  // 新鲜活动且非停滞时落 NO_OUTPUT（主循环仍会自动注入"继续"，仅标注不同）
   const out = runDiag([
-    JSON.stringify({ type: "turn.prompt", time: now() - 300, input: [{ type: "image", image_url: "x.png" }] }),
-    JSON.stringify({ type: "context.append_loop_event", time: now() - 250, event: { type: "content.part", part: { type: "text", text: "分析这张图片" } } }),
+    ev({ type: "turn.prompt", time: now() - 30, input: [{ type: "text", text: "fix the timeout failed error please" }] }),
+    ev({ type: "log.warning", time: now() - 20, message: "request timeout-flavored noise in payload text" }),
+    ev({ type: "context.append_loop_event", time: now() - 15, event: { type: "content.part", part: { type: "text", text: "thinking" } } }),
+  ]);
+  assert.match(out, /DIAG:NO_OUTPUT\|/);
+});
+
+test("diagnose: last step.end=interrupted → INTERRUPTED（中断后无回执同样走自动注入）", () => {
+  const out = runDiag([
+    ev({ type: "turn.prompt", time: now() - 50, input: [{ type: "text", text: "x" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 8, event: { type: "step.end", finishReason: "interrupted" } }),
+  ]);
+  assert.match(out, /DIAG:INTERRUPTED\|/);
+});
+
+test("diagnose: 停滞 + image 内容 → IMAGE_BLOCK（图片关键词仅用于标注）", () => {
+  const out = runDiag([
+    ev({ type: "turn.prompt", time: now() - 300, input: [{ type: "image", image_url: "x.png" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 250, event: { type: "content.part", part: { type: "text", text: "分析这张图片" } } }),
   ]);
   assert.match(out, /DIAG:IMAGE_BLOCK\|/);
 });
 
-test("diagnose: 停滞 + 无 image 无 error → MODEL_TIMEOUT", () => {
+test("diagnose: 停滞 + 无 image 无 step.end → MODEL_TIMEOUT", () => {
   const out = runDiag([
-    JSON.stringify({ type: "turn.prompt", time: now() - 300, input: [{ type: "text", text: "继续分析" }] }),
-    JSON.stringify({ type: "context.append_loop_event", time: now() - 250, event: { type: "content.part", part: { type: "think", text: "思考中" } } }),
+    ev({ type: "turn.prompt", time: now() - 300, input: [{ type: "text", text: "继续分析" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 250, event: { type: "content.part", part: { type: "think", text: "思考中" } } }),
   ]);
   assert.match(out, /DIAG:MODEL_TIMEOUT\|/);
 });
 
-test("diagnose: 停滞不足阈值 → UNKNOWN（留给后续观察）", () => {
+test("diagnose: 停滞不足阈值且无结构化异常 → NO_OUTPUT（主循环会注入一次观察）", () => {
   const out = runDiag([
-    JSON.stringify({ type: "turn.prompt", time: now() - 30, input: [{ type: "text", text: "快" }] }),
-    JSON.stringify({ type: "context.append_loop_event", time: now() - 20, event: { type: "content.part", part: { type: "text", text: "x" } } }),
+    ev({ type: "turn.prompt", time: now() - 30, input: [{ type: "text", text: "快" }] }),
+    ev({ type: "context.append_loop_event", time: now() - 20, event: { type: "content.part", part: { type: "text", text: "x" } } }),
   ]);
-  assert.match(out, /DIAG:UNKNOWN\|/);
+  assert.match(out, /DIAG:NO_OUTPUT\|/);
 });
 
 test("diagnose: KIMI_POLL_STALL_SEC 缩短后停滞判定提前", () => {
   const out = runDiag(
     [
-      JSON.stringify({ type: "turn.prompt", time: now() - 60, input: [{ type: "text", text: "继续分析" }] }),
+      ev({ type: "turn.prompt", time: now() - 60, input: [{ type: "text", text: "继续分析" }] }),
     ],
     { KIMI_POLL_STALL_SEC: "30" }
   );

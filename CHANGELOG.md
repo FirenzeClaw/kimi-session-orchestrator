@@ -2,6 +2,18 @@
 
 All notable changes to kimi-session-orchestrator.
 
+## v2.25 — 2026-08-27
+
+**poll 容错重构：任意报错形态统一自动注入"继续"（上游不稳定全型兜底）+ 本机轮询代理免疫**
+
+背景：v2.24 的诊断分支把"窗口内有 error 关键词"判为 `ERROR` 仅告警即退（exit 0），导致上游请求失败形态被短路，自动"继续"从未触达（当日 cc54fc49 实测复现：GLM 上游失败 10 连发，PM 无感静默终止）。按用户决策改为无差别容错。
+
+- fix: 主循环重构——回执无效（rlen < `KIMI_POLL_MIN_TEXT`）时，除 `NORMAL`（end_turn 工具型回合）外**一切异常形态统一走自动"继续"+ 常规监测**：纯计数 ≤3 次（两次注入间仅 `KIMI_POLL_RESUME_GRACE`=15s 启动宽限，防 POST→busy 竞速连发，v2.25b 删去原 120s STALL_SEC 观察期——sleep 期间对完工态失感），耗尽才写标记文件 + `[POLL_BLOCKED]` + exit 5 回调 PM。`IMAGE_BLOCK` 不再立即弃疗，同样先尝试 3 次
+- refactor: `diagnose_blocked()` 降级为标注用途——移除 error/failed/timeout 子串匹配（会被工具参数、错误文案误命中且挤占 timeout 分支），改读取结构化 `step.end finishReason`；新增标注 `UPSTREAM_ERROR`（上游请求失败主形态）/ `INTERRUPTED` / `NO_OUTPUT`，取代原 `ERROR` / `UNKNOWN`
+- fix: POLL_SCRIPT 头部 `install_opener(build_opener(ProxyHandler({})))`——本机服务禁用一切系统/env 代理，Windows 注册表代理开启时回环轮询不再被路由进外部代理黑洞（实测依赖 Clash 开关状态的 SERVER_OFFLINE 误报根因之一）
+- docs: guide-execute.md「轮询行为」章节重写为 v2.25 语义（含本机代理免疫说明）
+- test: 全量 71 用例通过——`poll-command.test.mjs` 8 例适配新标注契约（含"结构化判定不受文案关键词影响"反例）；新增 `poll-unified-recovery.test.mjs` 接线级 e2e：mock Kimi Server 真跑 dist 导出脚本全流程，验证「上游报错 fixture → UPSTREAM_ERROR → 注入×3 → 标记文件 continue-sent=3 → exit 5 → result 文件覆盖 [POLL_FETCH_FAILED]」（此测试顺带修复了 execFileSync 与同进程 mock server 的死锁陷阱，必须异步 execFile）
+
 ## v2.24 — 2026-08-24
 
 **Tunnel & Poll 稳健性加固（specs/008）：lock 只读化 + 轮询 900s 续轮 + 启动自动激活 + poll 状态机诊断**
